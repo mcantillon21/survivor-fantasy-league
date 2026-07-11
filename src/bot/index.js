@@ -9,6 +9,7 @@ import {
   handleStandings,
 } from './commands.js';
 import { handleMerge } from './merge-tribes.js';
+import { triggerBotChat } from './bot-ai.js';
 
 config();
 
@@ -108,6 +109,34 @@ client.on('interactionCreate', async (interaction) => {
       ephemeral: true,
     });
   }
+});
+
+// Bot players respond to messages in game channels
+const CHAT_CHANNELS = ['camp', 'challenge-lobby', 'tribal-council', 'merged-tribe'];
+let messageBuffer = [];
+let chatCooldown = false;
+
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+  if (!CHAT_CHANNELS.includes(message.channel.name)) return;
+
+  messageBuffer.push(`${message.author.username}: ${message.content}`);
+
+  if (messageBuffer.length > 10) messageBuffer.shift();
+
+  if (chatCooldown) return;
+  chatCooldown = true;
+
+  setTimeout(async () => {
+    try {
+      const recentChat = messageBuffer.join('\n');
+      const numBots = 1 + Math.floor(Math.random() * 3);
+      await triggerBotChat(message.channel, recentChat, numBots);
+    } catch (error) {
+      console.error('Bot chat error:', error.message);
+    }
+    chatCooldown = false;
+  }, 3000 + Math.random() * 7000);
 });
 
 client.login(process.env.DISCORD_TOKEN);
