@@ -1,0 +1,17 @@
+{
+  "name": "survivor-fantasy-league",
+  "version": "0.1.0",
+  "description": "AI-hosted online Survivor game with Discord bot and web challenges",
+  "type": "module",
+  "scripts": {
+    "bot": "node src/bot/index.js",
+    "dev": "node --watch src/bot/index.js",
+    "web": "cd web && npm run dev"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@supabase/supabase-js": "^2.47.10",
+    "dotenv": "^16.4.7"
+  }
+}
