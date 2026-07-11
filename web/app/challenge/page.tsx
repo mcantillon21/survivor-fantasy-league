@@ -195,27 +195,26 @@ export default function ChallengePage() {
 
   if (!gameStarted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-black flex items-center justify-center p-4">
-        <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-8 max-w-md w-full">
-          <h1 className="text-5xl font-survivor font-black text-orange-400 mb-6 text-center tracking-tight">
-            IMMUNITY CHALLENGE
+      <div className="min-h-screen bg-black flex items-center justify-center p-8">
+        <div className="bg-zinc-950 border border-orange-500/30 p-10 max-w-lg w-full">
+          <h1 className="text-6xl font-survivor font-black text-orange-500 mb-8 text-center tracking-tighter uppercase">
+            IMMUNITY<br/>CHALLENGE
           </h1>
-          <p className="text-gray-300 mb-6 text-center leading-relaxed">
-            Test your Survivor knowledge. 10 questions, 60 seconds each.
-            Speed and accuracy both matter.
+          <p className="text-gray-400 mb-8 text-center text-sm leading-relaxed">
+            10 questions. 60 seconds each. Speed and accuracy both matter.
           </p>
           <input
             type="text"
-            placeholder="Your Discord username"
+            placeholder="Discord username"
             value={discordId}
             onChange={(e) => setDiscordId(e.target.value)}
-            className="w-full px-4 py-3 bg-black/60 border border-orange-500/30 rounded text-white placeholder-gray-500 mb-4"
+            className="w-full px-5 py-4 bg-black border border-orange-500/30 text-white placeholder-gray-600 mb-6 focus:outline-none focus:border-orange-500/60"
           />
           <button
             onClick={handleStart}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded transition"
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 transition uppercase tracking-wider"
           >
-            START CHALLENGE
+            Start Challenge
           </button>
         </div>
       </div>
@@ -224,21 +223,21 @@ export default function ChallengePage() {
 
   if (gameFinished) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-black flex items-center justify-center p-4">
-        <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-8 max-w-md w-full text-center">
-          <h1 className="text-5xl font-survivor font-black text-orange-400 mb-6 tracking-tight">
-            CHALLENGE COMPLETE
+      <div className="min-h-screen bg-black flex items-center justify-center p-8">
+        <div className="bg-zinc-950 border border-orange-500/30 p-12 max-w-lg w-full text-center">
+          <h1 className="text-5xl font-survivor font-black text-orange-500 mb-10 tracking-tighter uppercase">
+            Challenge<br/>Complete
           </h1>
-          <div className="text-8xl font-black text-white my-8 font-survivor">{score}</div>
-          <p className="text-gray-300 mb-4 leading-relaxed">
+          <div className="text-9xl font-black text-orange-500 my-12 font-survivor">{score}</div>
+          <p className="text-gray-400 mb-6 text-sm leading-relaxed">
             {score >= 80
               ? 'Dominant performance. Immunity is yours.'
               : score >= 60
               ? 'Strong showing. You are safe tonight.'
               : 'Not enough. You are vulnerable at Tribal.'}
           </p>
-          <p className="text-gray-500 text-sm">
-            Results posted to Discord. Head back to see the rankings.
+          <p className="text-gray-600 text-xs tracking-wide">
+            Results posted to Discord
           </p>
         </div>
       </div>
@@ -248,27 +247,27 @@ export default function ChallengePage() {
   const question = QUESTIONS[currentQuestion];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-black flex items-center justify-center p-4">
-      <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-8 max-w-2xl w-full">
-        <div className="flex justify-between items-center mb-8">
-          <span className="text-orange-400 font-bold tracking-wide">
+    <div className="min-h-screen bg-black flex items-center justify-center p-8">
+      <div className="bg-zinc-950 border border-orange-500/30 p-10 max-w-3xl w-full">
+        <div className="flex justify-between items-center mb-10 border-b border-orange-500/20 pb-6">
+          <span className="text-orange-500 font-bold tracking-wider uppercase text-sm">
             Question {currentQuestion + 1}/{QUESTIONS.length}
           </span>
-          <span className="text-white font-black text-3xl font-survivor">
-            {timeLeft}s
+          <span className="text-orange-500 font-black text-5xl font-survivor">
+            {timeLeft}
           </span>
         </div>
 
-        <h2 className="text-2xl text-white font-bold mb-8 leading-relaxed">
+        <h2 className="text-2xl text-white font-medium mb-10 leading-relaxed">
           {question.question}
         </h2>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           {question.options.map((option, index) => (
             <button
               key={index}
               onClick={() => handleAnswer(index)}
-              className="w-full text-left px-6 py-4 bg-black/60 hover:bg-orange-900/40 border border-orange-500/30 hover:border-orange-500/60 rounded text-white transition"
+              className="w-full text-left px-6 py-5 bg-black hover:bg-orange-900/20 border border-orange-500/30 hover:border-orange-500 text-white transition text-sm"
             >
               {option}
             </button>

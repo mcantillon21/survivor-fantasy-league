@@ -53,36 +53,36 @@ export default function StandingsPage() {
   const eliminated = players.filter((p) => p.is_eliminated);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-black p-8">
+    <div className="min-h-screen bg-black p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-6xl font-survivor font-black text-orange-400 mb-12 text-center tracking-tight">
-          🌴 SURVIVOR STANDINGS
+        <h1 className="text-7xl font-survivor font-black text-orange-500 mb-16 text-center tracking-tighter uppercase">
+          Standings
         </h1>
 
-        <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-6 mb-6">
-          <h2 className="text-2xl font-bold text-white mb-6 tracking-wide">
-            Still in the game ({alive.length})
+        <div className="bg-zinc-950 border border-orange-500/30 p-8 mb-6">
+          <h2 className="text-xl font-bold text-white mb-8 uppercase tracking-wider">
+            In the Game ({alive.length})
           </h2>
           {alive.length === 0 ? (
-            <p className="text-gray-400">No players registered yet.</p>
+            <p className="text-gray-500 text-sm">No players registered yet.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {alive.map((player) => (
                 <div
                   key={player.id}
-                  className="bg-black/60 border border-orange-500/30 rounded px-4 py-3 flex items-center justify-between"
+                  className="bg-black border border-orange-500/30 px-6 py-4 flex items-center justify-between"
                 >
                   <span className="text-white font-medium">
                     {player.username}
                   </span>
-                  <div className="flex gap-2">
+                  <div className="flex gap-3">
                     {player.has_immunity && (
-                      <span className="text-orange-400 text-sm bg-orange-900/30 px-2 py-1 rounded">
-                        🛡️ Immunity
+                      <span className="text-orange-500 text-xs font-bold uppercase tracking-wider">
+                        Immunity
                       </span>
                     )}
                     {player.tribe && (
-                      <span className="text-gray-300 text-sm bg-gray-800/50 px-2 py-1 rounded">
+                      <span className="text-gray-500 text-xs uppercase tracking-wider">
                         {player.tribe}
                       </span>
                     )}
@@ -94,17 +94,17 @@ export default function StandingsPage() {
         </div>
 
         {eliminated.length > 0 && (
-          <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-6">
-            <h2 className="text-2xl font-bold text-gray-400 mb-6 tracking-wide">
+          <div className="bg-zinc-950 border border-orange-500/30 p-8">
+            <h2 className="text-xl font-bold text-gray-500 mb-8 uppercase tracking-wider">
               Eliminated ({eliminated.length})
             </h2>
             <div className="space-y-2">
               {eliminated.map((player) => (
                 <div
                   key={player.id}
-                  className="bg-black/60 border border-gray-700/30 rounded px-4 py-2 flex items-center justify-between opacity-60"
+                  className="bg-black border border-orange-500/20 px-6 py-4 opacity-40"
                 >
-                  <span className="text-gray-400 line-through">
+                  <span className="text-gray-600 line-through">
                     {player.username}
                   </span>
                 </div>
