@@ -181,11 +181,35 @@ export default function ChallengePage() {
     const finalScore = correctCount * 10 + speedBonus;
     setScore(finalScore);
 
+    // Tag the submission with the player's tribe and the current round so the
+    // referee can score per-round and (in the tribe phase) aggregate by tribe.
+    let tribe: string | null = null;
+    let round = 1;
+    try {
+      const { data: gs } = await supabase
+        .from('game_state')
+        .select('current_round')
+        .eq('id', 1)
+        .single();
+      if (gs?.current_round) round = gs.current_round;
+
+      const { data: player } = await supabase
+        .from('players')
+        .select('tribe')
+        .eq('username', discordId)
+        .single();
+      if (player?.tribe) tribe = player.tribe;
+    } catch (error) {
+      console.error('Failed to look up game state / tribe:', error);
+    }
+
     // Save to Supabase
     try {
       await supabase.from('challenges').insert({
         challenge_type: 'trivia',
         player_id: discordId,
+        tribe,
+        round,
         score: finalScore,
       });
     } catch (error) {

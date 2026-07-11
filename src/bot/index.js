@@ -1,7 +1,8 @@
-import { Client, GatewayIntentBits, REST, Routes } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, MessageFlags } from 'discord.js';
 import { config } from 'dotenv';
 import {
   handleRegister,
+  handleStart,
   handleChallenge,
   handleResults,
   handleVote,
@@ -23,6 +24,10 @@ const commands = [
   {
     name: 'register',
     description: 'Join the Survivor game',
+  },
+  {
+    name: 'start',
+    description: '(Host) Assign tribes and begin the game',
   },
   {
     name: 'challenge',
@@ -83,6 +88,8 @@ client.on('interactionCreate', async (interaction) => {
   try {
     if (commandName === 'register') {
       await handleRegister(interaction);
+    } else if (commandName === 'start') {
+      await handleStart(interaction);
     } else if (commandName === 'challenge') {
       await handleChallenge(interaction);
     } else if (commandName === 'results') {
@@ -96,11 +103,27 @@ client.on('interactionCreate', async (interaction) => {
     }
   } catch (error) {
     console.error(`Error handling ${commandName}:`, error);
-    await interaction.reply({
-      content: 'Something went wrong. Try again.',
-      ephemeral: true,
-    });
+    // Never let a failed error-reply crash the process. If the interaction was
+    // already acknowledged (e.g. deferred, or a duplicate instance answered it),
+    // fall back to followUp, and swallow any further failure.
+    try {
+      const payload = {
+        content: 'Something went wrong. Try again.',
+        flags: MessageFlags.Ephemeral,
+      };
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp(payload);
+      } else {
+        await interaction.reply(payload);
+      }
+    } catch (replyError) {
+      console.error('Could not deliver error message:', replyError.code || replyError);
+    }
   }
 });
+
+// Last-resort guards so a stray rejection/exception can't take the bot down.
+client.on('error', (err) => console.error('Client error:', err));
+process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
 
 client.login(process.env.DISCORD_TOKEN);

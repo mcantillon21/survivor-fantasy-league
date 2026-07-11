@@ -15,38 +15,7 @@ Create a bot at [discord.com/developers](https://discord.com/developers/applicat
 
 ### 2. Supabase Database
 
-Create tables:
-
-```sql
--- Players table
-create table players (
-  id uuid primary key default gen_random_uuid(),
-  discord_id text unique not null,
-  username text not null,
-  tribe text,
-  is_eliminated boolean default false,
-  has_immunity boolean default false,
-  created_at timestamp default now()
-);
-
--- Votes table
-create table votes (
-  id uuid primary key default gen_random_uuid(),
-  voter_id text not null,
-  target_id text not null,
-  tribal_council_id int not null,
-  created_at timestamp default now()
-);
-
--- Challenges table
-create table challenges (
-  id uuid primary key default gen_random_uuid(),
-  challenge_type text not null,
-  player_id text not null,
-  score int not null,
-  completed_at timestamp default now()
-);
-```
+Run the schema in [`db/schema.sql`](db/schema.sql) in the Supabase SQL editor. It is idempotent and safe to re-run — it creates `game_state`, `players`, `votes`, and `challenges`, and migrates any older tables (e.g. `votes.tribal_council_id` → `votes.round`).
 
 ### 3. Environment Variables
 
@@ -67,24 +36,35 @@ npm run dev
 ## Commands
 
 **Players:**
-- `/register` — Join the game
-- `/challenge` — Get link to current challenge
-- `/vote @player` — Vote someone out at Tribal Council
-- `/standings` — See who's still in
+- `/register` — Join the game (lobby only)
+- `/challenge` — Get link to the current challenge
+- `/vote @player` — Vote someone out at Tribal Council (or, in the finale, vote for who you want to **win**)
+- `/standings` — See tribes, jury, and who's still in
 
 **Host:**
-- `/results` — Show challenge scores and grant immunity (top 3)
-- `/tribal` — Reveal votes and eliminate player
+- `/start` — Assign registered players to two tribes and begin
+- `/results` — Show challenge scores and grant immunity (winning tribe pre-merge; top scorer post-merge)
+- `/tribal` — Reveal votes and eliminate a player (or read the jury vote and crown the winner)
+
+## Rules
+
+- **18 players, 2 tribes.** Assigned at `/start`.
+- **Tribe phase (until 12 remain):** tribes compete; each tribe's scores combine into one total. Winning tribe is immune; the **losing tribe** votes someone out among themselves.
+- **Merge at 12:** tribes dissolve, play goes individual. Immunity now goes to the **single top scorer**.
+- **Jury:** everyone voted out from the merge onward joins the jury.
+- **Final 3:** the jury votes **for** a winner; most votes wins.
+- **Ties:** Tribal Council ties → random draw. Jury ties → revote among the tied finalists (fewest-vote finalists dropped).
 
 ## How to Play
 
-1. Host creates Discord server and invites players
+1. Host creates a Discord server and invites players
 2. Players use `/register` to join
-3. Host posts `/challenge` → players compete on web
-4. Host runs `/results` → Claude narrates winner, grants immunity
-5. Players use `/vote @player` for Tribal Council
-6. Host runs `/tribal` → Claude dramatically reveals elimination
-7. Repeat until final 3
+3. Host runs `/start` to assign tribes
+4. Host posts `/challenge` → players compete on the web
+5. Host runs `/results` → Claude narrates and grants immunity
+6. Players use `/vote @player` at Tribal Council
+7. Host runs `/tribal` → Claude dramatically reveals the elimination and advances the round (announcing the merge / finale when reached)
+8. At the final 3, the jury `/vote`s and the host runs `/tribal` to crown the Sole Survivor
 
 ## Architecture
 
@@ -97,11 +77,14 @@ npm run dev
 
 ✅ Discord bot with slash commands
 ✅ Web challenge platform (trivia)
-✅ Claude AI narration (challenge results + tribal council)
-✅ Immunity system
-✅ Vote tallying
+✅ Claude AI narration (challenge results + tribal council + finale)
+✅ Phase-based immunity (tribe immunity pre-merge, individual post-merge)
+✅ Tribe assignment + merge at 12
+✅ Round tracking
+✅ Vote tallying with tie-breaks (random draw / jury revote)
 ✅ Player elimination
-✅ Standings page
+✅ Jury system + final vote
+✅ Standings page (tribes / jury / winner)
 
 ## Next Steps
 
@@ -109,5 +92,4 @@ npm run dev
 - [ ] Set up production Supabase
 - [ ] Create Discord server and install bot
 - [ ] Add more challenge types
-- [ ] Tribe assignments
-- [ ] Jury system for final vote
+- [ ] Real-time collaborative tribe trivia (shared live session; currently tribe scores are aggregated from each member's individual run)
