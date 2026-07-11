@@ -197,10 +197,10 @@ export default function ChallengePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-black flex items-center justify-center p-4">
         <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-8 max-w-md w-full">
-          <h1 className="text-4xl font-bold text-orange-400 mb-4 text-center">
+          <h1 className="text-5xl font-survivor font-black text-orange-400 mb-6 text-center tracking-tight">
             IMMUNITY CHALLENGE
           </h1>
-          <p className="text-gray-300 mb-6 text-center">
+          <p className="text-gray-300 mb-6 text-center leading-relaxed">
             Test your Survivor knowledge. 10 questions, 60 seconds each.
             Speed and accuracy both matter.
           </p>
@@ -226,11 +226,11 @@ export default function ChallengePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-black flex items-center justify-center p-4">
         <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-8 max-w-md w-full text-center">
-          <h1 className="text-5xl font-bold text-orange-400 mb-4">
+          <h1 className="text-5xl font-survivor font-black text-orange-400 mb-6 tracking-tight">
             CHALLENGE COMPLETE
           </h1>
-          <div className="text-8xl font-bold text-white my-8">{score}</div>
-          <p className="text-gray-300 mb-4">
+          <div className="text-8xl font-black text-white my-8 font-survivor">{score}</div>
+          <p className="text-gray-300 mb-4 leading-relaxed">
             {score >= 80
               ? 'Dominant performance. Immunity is yours.'
               : score >= 60
@@ -250,16 +250,16 @@ export default function ChallengePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-black flex items-center justify-center p-4">
       <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-8 max-w-2xl w-full">
-        <div className="flex justify-between items-center mb-6">
-          <span className="text-orange-400 font-bold">
+        <div className="flex justify-between items-center mb-8">
+          <span className="text-orange-400 font-bold tracking-wide">
             Question {currentQuestion + 1}/{QUESTIONS.length}
           </span>
-          <span className="text-white font-bold text-2xl">
+          <span className="text-white font-black text-3xl font-survivor">
             {timeLeft}s
           </span>
         </div>
 
-        <h2 className="text-2xl text-white font-bold mb-8">
+        <h2 className="text-2xl text-white font-bold mb-8 leading-relaxed">
           {question.question}
         </h2>
 

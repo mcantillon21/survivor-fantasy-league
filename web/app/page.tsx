@@ -4,13 +4,13 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-black flex items-center justify-center p-4">
       <div className="text-center">
-        <h1 className="text-6xl font-bold text-orange-400 mb-4">
+        <h1 className="text-8xl font-survivor font-black text-orange-400 mb-6 tracking-tight">
           SURVIVOR
         </h1>
-        <p className="text-2xl text-gray-300 mb-8">
+        <p className="text-2xl text-gray-300 mb-8 font-medium tracking-wide">
           Online Fantasy League
         </p>
-        <p className="text-gray-400 mb-12 max-w-md mx-auto">
+        <p className="text-gray-400 mb-12 max-w-md mx-auto text-lg leading-relaxed">
           AI-hosted Survivor game. Compete in challenges, form alliances, vote players out.
           Claude AI refs the entire game.
         </p>

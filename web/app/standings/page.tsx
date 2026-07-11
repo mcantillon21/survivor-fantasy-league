@@ -55,12 +55,12 @@ export default function StandingsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-900 via-red-900 to-black p-8">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-5xl font-bold text-orange-400 mb-8 text-center">
+        <h1 className="text-6xl font-survivor font-black text-orange-400 mb-12 text-center tracking-tight">
           🌴 SURVIVOR STANDINGS
         </h1>
 
         <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-6 mb-6">
-          <h2 className="text-2xl font-bold text-white mb-4">
+          <h2 className="text-2xl font-bold text-white mb-6 tracking-wide">
             Still in the game ({alive.length})
           </h2>
           {alive.length === 0 ? (
@@ -95,7 +95,7 @@ export default function StandingsPage() {
 
         {eliminated.length > 0 && (
           <div className="bg-black/40 backdrop-blur-sm border border-orange-500/20 rounded-lg p-6">
-            <h2 className="text-2xl font-bold text-gray-400 mb-4">
+            <h2 className="text-2xl font-bold text-gray-400 mb-6 tracking-wide">
               Eliminated ({eliminated.length})
             </h2>
             <div className="space-y-2">
