@@ -28,7 +28,7 @@ export async function handleRegister(interaction) {
 
   if (existing) {
     await interaction.reply({
-      content: 'You're already in the game.',
+      content: 'You are already in the game.',
       ephemeral: true,
     });
     return;
@@ -52,7 +52,7 @@ export async function handleRegister(interaction) {
 
 export async function handleChallenge(interaction) {
   await interaction.reply({
-    content: '🔥 **IMMUNITY CHALLENGE**\n\nHead to the challenge arena:\nhttps://survivor-fantasy.vercel.app/challenge\n\nYou have 10 minutes. Winners are safe at Tribal Council.',
+    content: '🔥 **IMMUNITY CHALLENGE**\n\nHead to the challenge arena:\nhttps://web-86d8fkyo6-nox-72b81e55.vercel.app/challenge\n\nYou have 10 minutes. Winners are safe at Tribal Council.',
   });
 }
 
@@ -93,7 +93,7 @@ export async function handleVote(interaction) {
 
   if (!voterData || voterData.is_eliminated) {
     await interaction.reply({
-      content: 'You're not in the game or already eliminated.',
+      content: 'You are not in the game or already eliminated.',
       ephemeral: true,
     });
     return;

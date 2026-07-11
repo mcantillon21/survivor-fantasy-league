@@ -234,8 +234,8 @@ export default function ChallengePage() {
             {score >= 80
               ? 'Dominant performance. Immunity is yours.'
               : score >= 60
-              ? 'Strong showing. You're safe tonight.'
-              : 'Not enough. You're vulnerable at Tribal.'}
+              ? 'Strong showing. You are safe tonight.'
+              : 'Not enough. You are vulnerable at Tribal.'}
           </p>
           <p className="text-gray-500 text-sm">
             Results posted to Discord. Head back to see the rankings.
