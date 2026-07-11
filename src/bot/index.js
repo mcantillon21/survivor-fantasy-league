@@ -10,6 +10,7 @@ import {
 } from './commands.js';
 import { handleMerge } from './merge-tribes.js';
 import { triggerBotChat } from './bot-ai.js';
+import { startBotLife } from './bot-life.js';
 
 config();
 
@@ -79,6 +80,8 @@ async function registerCommands() {
 client.once('ready', () => {
   console.log(`✓ Bot online as ${client.user.tag}`);
   registerCommands();
+  startBotLife(client);
+  console.log('✓ Bot life simulation started');
 });
 
 client.on('interactionCreate', async (interaction) => {

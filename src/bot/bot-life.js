@@ -1,0 +1,205 @@
+import { getBotResponse, profiles } from './bot-ai.js';
+
+let client = null;
+let campChannel = null;
+let tribeRedChannel = null;
+let tribeBlueChannel = null;
+
+const GUILD_ID = '1525547231086645409';
+
+export function startBotLife(discordClient) {
+  client = discordClient;
+
+  setTimeout(() => {
+    findChannels();
+    startCampChatter();
+    startTribeSchemes();
+    startAllianceDMs();
+  }, 10000);
+}
+
+function findChannels() {
+  const guild = client.guilds.cache.get(GUILD_ID);
+  if (!guild) return;
+
+  campChannel = guild.channels.cache.find(c => c.name === 'camp');
+  tribeRedChannel = guild.channels.cache.find(c => c.name === 'tribe-red');
+  tribeBlueChannel = guild.channels.cache.find(c => c.name === 'tribe-blue');
+}
+
+// Bots randomly post in #camp every 3-8 minutes
+function startCampChatter() {
+  const loop = async () => {
+    if (!campChannel) { findChannels(); }
+    if (!campChannel) return;
+
+    try {
+      const bot = profiles[Math.floor(Math.random() * profiles.length)];
+      const topics = [
+        'starting a casual conversation about camp life',
+        'commenting on the weather or how tired you are',
+        'speculating about who has alliances',
+        'talking about the last challenge',
+        'making a joke or observation about the game',
+        'bringing up strategy subtly',
+        'complaining about something at camp',
+        'hyping yourself up for the next challenge',
+      ];
+      const topic = topics[Math.floor(Math.random() * topics.length)];
+
+      const text = await getBotResponse(
+        bot.id,
+        'camp',
+        `[You are ${topic}. Start a conversation naturally. No one else has spoken recently.]`
+      );
+
+      if (text) {
+        const webhooks = await campChannel.fetchWebhooks();
+        let webhook = webhooks.find(w => w.name === 'Survivor Bot');
+        if (!webhook) webhook = await campChannel.createWebhook({ name: 'Survivor Bot' });
+
+        await webhook.send({
+          content: text,
+          username: bot.name,
+          avatarURL: bot.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(bot.name)}&background=random&size=128&bold=true`,
+        });
+      }
+    } catch (error) {
+      console.error('Camp chatter error:', error.message);
+    }
+
+    const nextDelay = (180 + Math.random() * 300) * 1000;
+    setTimeout(loop, nextDelay);
+  };
+
+  const initialDelay = (30 + Math.random() * 60) * 1000;
+  setTimeout(loop, initialDelay);
+}
+
+// Bots scheme in tribe channels every 5-15 minutes
+function startTribeSchemes() {
+  const schemeInTribe = async (channel, tribeName) => {
+    if (!channel) return;
+
+    try {
+      const tribeBots = profiles.filter(p => {
+        const idx = profiles.indexOf(p);
+        return tribeName === 'Red' ? idx < 8 : idx >= 8;
+      });
+
+      const bot1 = tribeBots[Math.floor(Math.random() * tribeBots.length)];
+      const bot2 = tribeBots.filter(b => b !== bot1)[Math.floor(Math.random() * (tribeBots.length - 1))];
+
+      const schemes = [
+        `proposing to ${bot2.name} that they vote someone specific out next`,
+        `asking ${bot2.name} if they trust another tribe member`,
+        `strategizing about who to target after the merge`,
+        `venting about someone on the tribe being annoying`,
+        `trying to form a final 3 deal`,
+        `wondering if someone has a hidden immunity idol`,
+      ];
+      const scheme = schemes[Math.floor(Math.random() * schemes.length)];
+
+      const text1 = await getBotResponse(
+        bot1.id,
+        channel.name,
+        `[You are ${scheme}. Start the conversation.]`
+      );
+
+      if (text1) {
+        const webhooks = await channel.fetchWebhooks();
+        let webhook = webhooks.find(w => w.name === 'Survivor Bot');
+        if (!webhook) webhook = await channel.createWebhook({ name: 'Survivor Bot' });
+
+        await webhook.send({
+          content: text1,
+          username: bot1.name,
+          avatarURL: bot1.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(bot1.name)}&background=random&size=128&bold=true`,
+        });
+
+        // Bot2 responds after a delay
+        await new Promise(r => setTimeout(r, 3000 + Math.random() * 5000));
+
+        const text2 = await getBotResponse(
+          bot2.id,
+          channel.name,
+          `${bot1.name}: ${text1}\n\n[Respond naturally to what ${bot1.name} just said.]`
+        );
+
+        if (text2) {
+          await webhook.send({
+            content: text2,
+            username: bot2.name,
+            avatarURL: bot2.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(bot2.name)}&background=random&size=128&bold=true`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Tribe scheme error:', error.message);
+    }
+  };
+
+  const loopRed = () => {
+    if (!tribeRedChannel) findChannels();
+    schemeInTribe(tribeRedChannel, 'Red');
+    setTimeout(loopRed, (300 + Math.random() * 600) * 1000);
+  };
+
+  const loopBlue = () => {
+    if (!tribeBlueChannel) findChannels();
+    schemeInTribe(tribeBlueChannel, 'Blue');
+    setTimeout(loopBlue, (300 + Math.random() * 600) * 1000);
+  };
+
+  setTimeout(loopRed, (60 + Math.random() * 120) * 1000);
+  setTimeout(loopBlue, (90 + Math.random() * 120) * 1000);
+}
+
+// Bots DM real players to form alliances
+function startAllianceDMs() {
+  const loop = async () => {
+    try {
+      const guild = client.guilds.cache.get(GUILD_ID);
+      if (!guild) return;
+
+      const members = await guild.members.fetch();
+      const realPlayers = members.filter(m => !m.user.bot && m.id !== guild.ownerId);
+
+      if (realPlayers.size === 0) return;
+
+      const target = realPlayers.random();
+      const bot = profiles[Math.floor(Math.random() * profiles.length)];
+
+      const dmTopics = [
+        `reaching out to ${target.user.username} to form a secret alliance`,
+        `warning ${target.user.username} that someone is targeting them`,
+        `asking ${target.user.username} who they are voting for tonight`,
+        `proposing a final 2 deal to ${target.user.username}`,
+        `telling ${target.user.username} you have info about who found an idol`,
+        `checking in with ${target.user.username} about how they are feeling about the game`,
+      ];
+      const topic = dmTopics[Math.floor(Math.random() * dmTopics.length)];
+
+      const text = await getBotResponse(
+        bot.id,
+        'dm',
+        `[You are privately messaging ${target.user.username}. You are ${topic}. Be direct and strategic.]`
+      );
+
+      if (text) {
+        const dm = await target.createDM();
+        await dm.send(`**${bot.name}:** ${text}`);
+      }
+    } catch (error) {
+      if (!error.message.includes('Cannot send messages to this user')) {
+        console.error('Alliance DM error:', error.message);
+      }
+    }
+
+    const nextDelay = (600 + Math.random() * 1200) * 1000;
+    setTimeout(loop, nextDelay);
+  };
+
+  const initialDelay = (120 + Math.random() * 180) * 1000;
+  setTimeout(loop, initialDelay);
+}
