@@ -8,6 +8,7 @@ import {
   handleTribal,
   handleStandings,
 } from './commands.js';
+import { handleMerge } from './merge-tribes.js';
 
 config();
 
@@ -52,6 +53,10 @@ const commands = [
     name: 'standings',
     description: 'View current game standings',
   },
+  {
+    name: 'merge',
+    description: 'Merge the tribes (host only)',
+  },
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -93,6 +98,8 @@ client.on('interactionCreate', async (interaction) => {
       await handleTribal(interaction);
     } else if (commandName === 'standings') {
       await handleStandings(interaction);
+    } else if (commandName === 'merge') {
+      await handleMerge(interaction);
     }
   } catch (error) {
     console.error(`Error handling ${commandName}:`, error);
