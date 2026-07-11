@@ -119,14 +119,94 @@ const CHAT_CHANNELS = ['camp', 'challenge-lobby', 'tribal-council', 'merged-trib
 let messageBuffer = [];
 let chatCooldown = false;
 
+import { profiles, getBotResponse } from './bot-ai.js';
+
+const BOT_NAMES = profiles.map(p => p.name.toLowerCase());
+
+function findTaggedBots(content) {
+  const lower = content.toLowerCase();
+  return profiles.filter(p => lower.includes(p.name.toLowerCase()));
+}
+
 client.on('messageCreate', async (message) => {
-  if (message.author.bot) return;
+  // Ignore the main bot's own messages but allow webhook messages through
+  if (message.author.id === client.user.id) return;
   if (!CHAT_CHANNELS.includes(message.channel.name)) return;
 
-  messageBuffer.push(`${message.author.username}: ${message.content}`);
+  // Check if this is a webhook bot message that tags another bot
+  const isWebhook = message.webhookId != null;
+  const taggedBots = findTaggedBots(message.content);
 
+  const senderName = isWebhook ? message.author.username : message.author.username;
+  messageBuffer.push(`${senderName}: ${message.content}`);
   if (messageBuffer.length > 10) messageBuffer.shift();
 
+  // If specific bots were tagged, those bots respond first
+  if (taggedBots.length > 0) {
+    setTimeout(async () => {
+      try {
+        const webhooks = await message.channel.fetchWebhooks();
+        let webhook = webhooks.find(w => w.name === 'Survivor Bot');
+        if (!webhook) webhook = await message.channel.createWebhook({ name: 'Survivor Bot' });
+
+        const recentChat = messageBuffer.join('\n');
+
+        for (const bot of taggedBots) {
+          const delay = 1000 + Math.random() * 2000;
+          await new Promise(r => setTimeout(r, delay));
+
+          const text = await getBotResponse(
+            bot.id,
+            message.channel.name,
+            `${recentChat}\n\n[${senderName} is talking directly to YOU. Respond to them.]`
+          );
+
+          if (text) {
+            await webhook.send({
+              content: text,
+              username: bot.name,
+              avatarURL: bot.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(bot.name)}&background=random&size=128&bold=true`,
+            });
+            messageBuffer.push(`${bot.name}: ${text}`);
+            if (messageBuffer.length > 10) messageBuffer.shift();
+          }
+        }
+
+        // A few others might chime in too
+        const numExtras = Math.floor(Math.random() * 3);
+        if (numExtras > 0) {
+          const extras = profiles
+            .filter(p => !taggedBots.includes(p))
+            .sort(() => Math.random() - 0.5)
+            .slice(0, numExtras);
+
+          for (const bot of extras) {
+            const delay = 2000 + Math.random() * 3000;
+            await new Promise(r => setTimeout(r, delay));
+
+            const text = await getBotResponse(bot.id, message.channel.name, messageBuffer.join('\n'));
+            if (text) {
+              await webhook.send({
+                content: text,
+                username: bot.name,
+                avatarURL: bot.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(bot.name)}&background=random&size=128&bold=true`,
+              });
+              messageBuffer.push(`${bot.name}: ${text}`);
+              if (messageBuffer.length > 10) messageBuffer.shift();
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Tagged bot error:', error.message);
+      }
+    }, 1000 + Math.random() * 2000);
+    return;
+  }
+
+  // Skip bot-to-bot messages unless tagged (prevent infinite loops)
+  if (isWebhook) return;
+
+  // Normal response: random bots chime in
   if (chatCooldown) return;
   chatCooldown = true;
 

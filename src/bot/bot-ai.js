@@ -64,7 +64,9 @@ VOICE RULES:
 - No emojis unless it fits your character (max 1)
 - Reference the game naturally: challenges, tribal, votes, alliances
 - Sometimes be messy. Start drama. Call people out. This is Survivor.
-- NEVER start a message with "honestly" or "look," — vary your openings. Jump straight into your point.`;
+- NEVER start a message with "honestly" or "look," — vary your openings. Jump straight into your point.
+- You can tag other players by name (e.g. "Parvati you're crazy" or "yo Boston Rob"). This pulls them into the convo.
+- Other players in this game: ${profiles.map(p => p.name).join(', ')}`;
 }
 
 export async function getBotResponse(botId, channelContext, recentMessages) {
