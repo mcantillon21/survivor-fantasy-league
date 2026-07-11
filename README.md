@@ -66,22 +66,48 @@ npm run dev
 
 ## Commands
 
+**Players:**
 - `/register` — Join the game
 - `/challenge` — Get link to current challenge
-- `/vote @player` — Vote someone out
+- `/vote @player` — Vote someone out at Tribal Council
 - `/standings` — See who's still in
+
+**Host:**
+- `/results` — Show challenge scores and grant immunity (top 3)
+- `/tribal` — Reveal votes and eliminate player
+
+## How to Play
+
+1. Host creates Discord server and invites players
+2. Players use `/register` to join
+3. Host posts `/challenge` → players compete on web
+4. Host runs `/results` → Claude narrates winner, grants immunity
+5. Players use `/vote @player` for Tribal Council
+6. Host runs `/tribal` → Claude dramatically reveals elimination
+7. Repeat until final 3
 
 ## Architecture
 
 - **Discord Bot** — Game command center (registration, voting, announcements)
-- **Web Platform** (Next.js) — Challenge arena where players compete
-- **Claude AI** — Refs challenges, tallies votes, narrates eliminations
-- **Supabase** — Game state, player records, votes
+- **Web Platform** (Next.js) — Challenge arena (trivia game)
+- **Claude AI** — Refs challenges, narrates results, tallies votes
+- **Supabase** — Game state, player records, challenge scores
+
+## Demo-Ready Checklist
+
+✅ Discord bot with slash commands
+✅ Web challenge platform (trivia)
+✅ Claude AI narration (challenge results + tribal council)
+✅ Immunity system
+✅ Vote tallying
+✅ Player elimination
+✅ Standings page
 
 ## Next Steps
 
-- [ ] Build web challenge platform (Next.js)
-- [ ] Add Claude referee logic (challenge scoring, vote tallying)
-- [ ] Create first challenge (Survivor trivia)
-- [ ] Automate tribal council vote reveals
-- [ ] Add tribe assignments
+- [ ] Deploy web platform to Vercel
+- [ ] Set up production Supabase
+- [ ] Create Discord server and install bot
+- [ ] Add more challenge types
+- [ ] Tribe assignments
+- [ ] Jury system for final vote
