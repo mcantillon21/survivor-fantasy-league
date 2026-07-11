@@ -2,6 +2,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { config } from 'dotenv';
+config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -89,11 +91,30 @@ export async function getBotResponse(botId, channelContext, recentMessages) {
   return text;
 }
 
+const webhookCache = new Map();
+
+async function getOrCreateWebhook(channel) {
+  if (webhookCache.has(channel.id)) {
+    return webhookCache.get(channel.id);
+  }
+
+  const webhooks = await channel.fetchWebhooks();
+  let webhook = webhooks.find(w => w.name === 'Survivor Bot');
+
+  if (!webhook) {
+    webhook = await channel.createWebhook({ name: 'Survivor Bot' });
+  }
+
+  webhookCache.set(channel.id, webhook);
+  return webhook;
+}
+
 export async function triggerBotChat(channel, recentMessages, numBots = 2) {
   const activeBots = profiles
     .sort(() => Math.random() - 0.5)
     .slice(0, numBots);
 
+  const webhook = await getOrCreateWebhook(channel);
   const responses = [];
 
   for (const bot of activeBots) {
@@ -102,7 +123,11 @@ export async function triggerBotChat(channel, recentMessages, numBots = 2) {
 
     const text = await getBotResponse(bot.id, channel.name, recentMessages);
     if (text) {
-      await channel.send(`**${bot.name}:** ${text}`);
+      await webhook.send({
+        content: text,
+        username: bot.name,
+        avatarURL: bot.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(bot.name)}&background=random&size=128&bold=true`,
+      });
       responses.push({ name: bot.name, text });
     }
   }
