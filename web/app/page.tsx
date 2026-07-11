@@ -16,13 +16,13 @@ export default function Home() {
         <div className="space-y-4 max-w-md mx-auto">
           <Link
             href="/challenge"
-            className="block bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 transition-all uppercase tracking-wide active:scale-[0.96]"
+            className="block bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-lg transition-all uppercase tracking-wide active:scale-[0.96]"
           >
             Enter Challenge Arena
           </Link>
           <Link
             href="/standings"
-            className="block bg-transparent hover:bg-white/5 border border-orange-500/50 text-orange-400 font-bold py-4 px-8 transition-all uppercase tracking-wide active:scale-[0.96]"
+            className="block bg-transparent hover:bg-white/5 border border-orange-500/50 text-orange-400 font-bold py-4 px-8 rounded-lg transition-all uppercase tracking-wide active:scale-[0.96]"
           >
             View Standings
           </Link>
