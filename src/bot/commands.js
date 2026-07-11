@@ -52,7 +52,7 @@ export async function handleRegister(interaction) {
 
 export async function handleChallenge(interaction) {
   await interaction.reply({
-    content: '🔥 **IMMUNITY CHALLENGE**\n\nHead to the challenge arena:\nhttps://survivor-fantasy-league-6ju8n5zxo-nox-72b81e55.vercel.app/challenge\n\nYou have 10 minutes. Winners are safe at Tribal Council.',
+    content: '🔥 **IMMUNITY CHALLENGE**\n\nHead to the challenge arena:\nhttps://survivor-fantasy-league-hdmvdsyqf-nox-72b81e55.vercel.app/challenge\n\nYou have 10 minutes. Winners are safe at Tribal Council.',
   });
 }
 
