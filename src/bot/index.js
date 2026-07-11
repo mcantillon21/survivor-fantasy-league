@@ -133,13 +133,13 @@ client.on('messageCreate', async (message) => {
   setTimeout(async () => {
     try {
       const recentChat = messageBuffer.join('\n');
-      const numBots = 1 + Math.floor(Math.random() * 3);
+      const numBots = 1 + Math.floor(Math.random() * 8);
       await triggerBotChat(message.channel, recentChat, numBots);
     } catch (error) {
       console.error('Bot chat error:', error.message);
     }
     chatCooldown = false;
-  }, 3000 + Math.random() * 7000);
+  }, 2000 + Math.random() * 3000);
 });
 
 client.login(process.env.DISCORD_TOKEN);
