@@ -212,7 +212,7 @@ export default function ChallengePage() {
           />
           <button
             onClick={handleStart}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 transition uppercase tracking-wider"
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 transition-all uppercase tracking-wider active:scale-[0.96]"
           >
             Start Challenge
           </button>
@@ -224,19 +224,19 @@ export default function ChallengePage() {
   if (gameFinished) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-8">
-        <div className="bg-zinc-950 border border-orange-500/30 p-12 max-w-lg w-full text-center">
-          <h1 className="text-5xl font-survivor font-black text-orange-500 mb-10 tracking-tighter uppercase">
+        <div className="bg-zinc-950 border border-orange-500/30 p-12 max-w-lg w-full text-center animate-in fade-in duration-500">
+          <h1 className="text-5xl font-survivor font-black text-orange-500 mb-10 tracking-tighter uppercase animate-in slide-in-from-top-4 duration-700">
             Challenge<br/>Complete
           </h1>
-          <div className="text-9xl font-black text-orange-500 my-12 font-survivor">{score}</div>
-          <p className="text-gray-400 mb-6 text-sm leading-relaxed">
+          <div className="text-9xl font-black text-orange-500 my-12 font-survivor tabular-nums animate-in zoom-in-50 duration-700 delay-200">{score}</div>
+          <p className="text-gray-400 mb-6 text-sm leading-relaxed animate-in fade-in duration-700 delay-300">
             {score >= 80
               ? 'Dominant performance. Immunity is yours.'
               : score >= 60
               ? 'Strong showing. You are safe tonight.'
               : 'Not enough. You are vulnerable at Tribal.'}
           </p>
-          <p className="text-gray-600 text-xs tracking-wide">
+          <p className="text-gray-600 text-xs tracking-wide animate-in fade-in duration-700 delay-500">
             Results posted to Discord
           </p>
         </div>
@@ -253,7 +253,7 @@ export default function ChallengePage() {
           <span className="text-orange-500 font-bold tracking-wider uppercase text-sm">
             Question {currentQuestion + 1}/{QUESTIONS.length}
           </span>
-          <span className="text-orange-500 font-black text-5xl font-survivor">
+          <span className="text-orange-500 font-black text-5xl font-survivor tabular-nums">
             {timeLeft}
           </span>
         </div>
@@ -267,7 +267,7 @@ export default function ChallengePage() {
             <button
               key={index}
               onClick={() => handleAnswer(index)}
-              className="w-full text-left px-6 py-5 bg-black hover:bg-orange-900/20 border border-orange-500/30 hover:border-orange-500 text-white transition text-sm"
+              className="w-full text-left px-6 py-5 bg-black hover:bg-orange-900/20 border border-orange-500/30 hover:border-orange-500 text-white transition-all text-sm active:scale-[0.98]"
             >
               {option}
             </button>
