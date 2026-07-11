@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Bebas_Neue } from "next/font/google";
 import "./globals.css";
 
 const nbInternational = localFont({
@@ -18,10 +19,10 @@ const nbInternational = localFont({
   variable: "--font-nb-international",
 });
 
-const survivorFont = localFont({
-  src: "../public/fonts/NBInternationalProCG-Bold.woff2",
+const bebasNeue = Bebas_Neue({
+  weight: "400",
+  subsets: ["latin"],
   variable: "--font-survivor",
-  weight: "900",
 });
 
 export const metadata: Metadata = {
@@ -37,7 +38,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${nbInternational.variable} ${survivorFont.variable} h-full antialiased`}
+      className={`${nbInternational.variable} ${bebasNeue.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
