@@ -59,7 +59,7 @@ export default function StandingsPage() {
           Standings
         </h1>
 
-        <div className="bg-zinc-950 border border-orange-500/30 p-8 mb-6">
+        <div className="bg-zinc-950 border border-orange-500/30 rounded-2xl p-8 mb-6">
           <h2 className="text-xl font-bold text-white mb-8 uppercase tracking-wider">
             In the Game ({alive.length})
           </h2>
@@ -70,7 +70,7 @@ export default function StandingsPage() {
               {alive.map((player) => (
                 <div
                   key={player.id}
-                  className="bg-black border border-orange-500/30 px-6 py-4 flex items-center justify-between"
+                  className="bg-black border border-orange-500/30 rounded-lg px-6 py-4 flex items-center justify-between"
                 >
                   <span className="text-white font-medium">
                     {player.username}
@@ -94,7 +94,7 @@ export default function StandingsPage() {
         </div>
 
         {eliminated.length > 0 && (
-          <div className="bg-zinc-950 border border-orange-500/30 p-8">
+          <div className="bg-zinc-950 border border-orange-500/30 rounded-2xl p-8">
             <h2 className="text-xl font-bold text-gray-500 mb-8 uppercase tracking-wider">
               Eliminated ({eliminated.length})
             </h2>
@@ -102,7 +102,7 @@ export default function StandingsPage() {
               {eliminated.map((player) => (
                 <div
                   key={player.id}
-                  className="bg-black border border-orange-500/20 px-6 py-4 opacity-40"
+                  className="bg-black border border-orange-500/20 rounded-lg px-6 py-4 opacity-40"
                 >
                   <span className="text-gray-600 line-through">
                     {player.username}

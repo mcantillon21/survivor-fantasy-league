@@ -196,7 +196,7 @@ export default function ChallengePage() {
   if (!gameStarted) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-8">
-        <div className="bg-zinc-950 border border-orange-500/30 p-10 max-w-lg w-full">
+        <div className="bg-zinc-950 border border-orange-500/30 rounded-2xl p-10 max-w-lg w-full">
           <h1 className="text-6xl font-survivor font-black text-orange-500 mb-8 text-center tracking-tighter uppercase">
             IMMUNITY<br/>CHALLENGE
           </h1>
@@ -208,11 +208,11 @@ export default function ChallengePage() {
             placeholder="Discord username"
             value={discordId}
             onChange={(e) => setDiscordId(e.target.value)}
-            className="w-full px-5 py-4 bg-black border border-orange-500/30 text-white placeholder-gray-600 mb-6 focus:outline-none focus:border-orange-500/60"
+            className="w-full px-5 py-4 bg-black border border-orange-500/30 rounded-lg text-white placeholder-gray-600 mb-6 focus:outline-none focus:border-orange-500/60"
           />
           <button
             onClick={handleStart}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 transition-all uppercase tracking-wider active:scale-[0.96]"
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-lg transition-all uppercase tracking-wider active:scale-[0.96]"
           >
             Start Challenge
           </button>
@@ -224,7 +224,7 @@ export default function ChallengePage() {
   if (gameFinished) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-8">
-        <div className="bg-zinc-950 border border-orange-500/30 p-12 max-w-lg w-full text-center animate-in fade-in duration-500">
+        <div className="bg-zinc-950 border border-orange-500/30 rounded-2xl p-12 max-w-lg w-full text-center animate-in fade-in duration-500">
           <h1 className="text-5xl font-survivor font-black text-orange-500 mb-10 tracking-tighter uppercase animate-in slide-in-from-top-4 duration-700">
             Challenge<br/>Complete
           </h1>
@@ -248,7 +248,7 @@ export default function ChallengePage() {
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-8">
-      <div className="bg-zinc-950 border border-orange-500/30 p-10 max-w-3xl w-full">
+      <div className="bg-zinc-950 border border-orange-500/30 rounded-2xl p-10 max-w-3xl w-full">
         <div className="flex justify-between items-center mb-10 border-b border-orange-500/20 pb-6">
           <span className="text-orange-500 font-bold tracking-wider uppercase text-sm">
             Question {currentQuestion + 1}/{QUESTIONS.length}
@@ -267,7 +267,7 @@ export default function ChallengePage() {
             <button
               key={index}
               onClick={() => handleAnswer(index)}
-              className="w-full text-left px-6 py-5 bg-black hover:bg-orange-900/20 border border-orange-500/30 hover:border-orange-500 text-white transition-all text-sm active:scale-[0.98]"
+              className="w-full text-left px-6 py-5 bg-black hover:bg-orange-900/20 border border-orange-500/30 hover:border-orange-500 rounded-lg text-white transition-all text-sm active:scale-[0.98]"
             >
               {option}
             </button>
