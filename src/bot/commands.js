@@ -34,18 +34,38 @@ export async function handleRegister(interaction) {
     return;
   }
 
+  // Auto-assign to tribe with fewer players
+  const { data: allPlayers } = await supabase
+    .from('players')
+    .select('tribe')
+    .eq('is_eliminated', false);
+
+  const redCount = (allPlayers || []).filter(p => p.tribe === 'red').length;
+  const blueCount = (allPlayers || []).filter(p => p.tribe === 'blue').length;
+  const assignedTribe = redCount <= blueCount ? 'red' : 'blue';
+
   const { error } = await supabase.from('players').insert({
     discord_id: userId,
     username: username,
-    tribe: null,
+    tribe: assignedTribe,
     is_eliminated: false,
     has_immunity: false,
   });
 
   if (error) throw error;
 
+  // Assign Discord tribe role
+  const guild = interaction.guild;
+  const member = await guild.members.fetch(userId);
+  const roleName = assignedTribe === 'red' ? 'Tribe Red' : 'Tribe Blue';
+  const tribeRole = guild.roles.cache.find(r => r.name === roleName);
+  if (tribeRole) {
+    await member.roles.add(tribeRole);
+  }
+
+  const tribeEmoji = assignedTribe === 'red' ? '🔴' : '🔵';
   await interaction.reply({
-    content: `Welcome to the game, ${username}. The tribe will see you soon.`,
+    content: `${tribeEmoji} Welcome to **Tribe ${assignedTribe.charAt(0).toUpperCase() + assignedTribe.slice(1)}**, ${username}.\n\nYou can ONLY see and communicate with your tribemates. The other tribe is invisible to you until the merge.`,
     ephemeral: true,
   });
 }

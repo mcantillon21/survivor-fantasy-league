@@ -18,6 +18,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.MessageContent,
   ],
 });
@@ -115,7 +116,11 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // Bot players respond to messages in game channels
-const CHAT_CHANNELS = ['camp', 'challenge-lobby', 'tribal-council', 'merged-tribe'];
+const CHAT_CHANNELS = [
+  'tribe-red-camp', 'tribe-red-challenges', 'tribe-red-tribal',
+  'tribe-blue-camp', 'tribe-blue-challenges', 'tribe-blue-tribal',
+  'merged-camp', 'merged-challenges', 'merged-tribal',
+];
 let messageBuffer = [];
 let chatCooldown = false;
 

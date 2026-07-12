@@ -6,6 +6,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
@@ -17,7 +18,7 @@ client.once('ready', async () => {
   const guild = await client.guilds.fetch(GUILD_ID);
   console.log(`✓ Found guild: ${guild.name}`);
 
-  // Create roles first
+  // Create roles
   console.log('\nCreating roles...');
 
   let hostRole = guild.roles.cache.find(r => r.name === 'Host');
@@ -37,6 +38,26 @@ client.once('ready', async () => {
       color: 0x00FF00,
     });
     console.log('✓ Created @Player role');
+  }
+
+  let tribeRedRole = guild.roles.cache.find(r => r.name === 'Tribe Red');
+  if (!tribeRedRole) {
+    tribeRedRole = await guild.roles.create({
+      name: 'Tribe Red',
+      color: 0xE74C3C,
+      hoist: true,
+    });
+    console.log('✓ Created @Tribe Red role');
+  }
+
+  let tribeBlueRole = guild.roles.cache.find(r => r.name === 'Tribe Blue');
+  if (!tribeBlueRole) {
+    tribeBlueRole = await guild.roles.create({
+      name: 'Tribe Blue',
+      color: 0x3498DB,
+      hoist: true,
+    });
+    console.log('✓ Created @Tribe Blue role');
   }
 
   let juryRole = guild.roles.cache.find(r => r.name === 'Jury');
@@ -60,7 +81,7 @@ client.once('ready', async () => {
   // Create categories and channels
   console.log('\nCreating channels...');
 
-  // GAME INFO category
+  // GAME INFO category - visible to all
   let gameInfoCat = guild.channels.cache.find(c => c.name === '📢 GAME INFO' && c.type === ChannelType.GuildCategory);
   if (!gameInfoCat) {
     gameInfoCat = await guild.channels.create({
@@ -76,14 +97,8 @@ client.once('ready', async () => {
       type: ChannelType.GuildText,
       parent: gameInfoCat.id,
       permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: [PermissionFlagsBits.SendMessages],
-        },
-        {
-          id: hostRole.id,
-          allow: [PermissionFlagsBits.SendMessages],
-        },
+        { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
+        { id: hostRole.id, allow: [PermissionFlagsBits.SendMessages] },
       ],
     });
     console.log('  ✓ Created #announcements (read-only)');
@@ -95,93 +110,91 @@ client.once('ready', async () => {
       type: ChannelType.GuildText,
       parent: gameInfoCat.id,
       permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: [PermissionFlagsBits.SendMessages],
-        },
-        {
-          id: hostRole.id,
-          allow: [PermissionFlagsBits.SendMessages],
-        },
+        { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
+        { id: hostRole.id, allow: [PermissionFlagsBits.SendMessages] },
       ],
     });
     console.log('  ✓ Created #standings (read-only)');
   }
 
-  // IN GAME category
-  let inGameCat = guild.channels.cache.find(c => c.name === '🏝️ IN GAME' && c.type === ChannelType.GuildCategory);
-  if (!inGameCat) {
-    inGameCat = await guild.channels.create({
-      name: '🏝️ IN GAME',
-      type: ChannelType.GuildCategory,
-    });
-    console.log('✓ Created category: 🏝️ IN GAME');
-  }
-
-  if (!guild.channels.cache.find(c => c.name === 'camp')) {
-    await guild.channels.create({
-      name: 'camp',
-      type: ChannelType.GuildText,
-      parent: inGameCat.id,
-      topic: 'General chat - form alliances, plan strategy',
-    });
-    console.log('  ✓ Created #camp');
-  }
-
-  if (!guild.channels.cache.find(c => c.name === 'challenge-lobby')) {
-    await guild.channels.create({
-      name: 'challenge-lobby',
-      type: ChannelType.GuildText,
-      parent: inGameCat.id,
-      topic: 'Pre-challenge discussion and challenge links',
-    });
-    console.log('  ✓ Created #challenge-lobby');
-  }
-
-  if (!guild.channels.cache.find(c => c.name === 'tribal-council')) {
-    await guild.channels.create({
-      name: 'tribal-council',
-      type: ChannelType.GuildText,
-      parent: inGameCat.id,
-      topic: 'Vote players out here using /vote @player',
-    });
-    console.log('  ✓ Created #tribal-council');
-  }
-
-  // TRIBES category
-  let tribesCat = guild.channels.cache.find(c => c.name === '👥 TRIBES' && c.type === ChannelType.GuildCategory);
-  if (!tribesCat) {
-    tribesCat = await guild.channels.create({
-      name: '👥 TRIBES',
+  // TRIBE RED category - ONLY visible to Tribe Red
+  let tribeRedCat = guild.channels.cache.find(c => c.name === '🔴 TRIBE RED' && c.type === ChannelType.GuildCategory);
+  if (!tribeRedCat) {
+    tribeRedCat = await guild.channels.create({
+      name: '🔴 TRIBE RED',
       type: ChannelType.GuildCategory,
       permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: [PermissionFlagsBits.ViewChannel],
-        },
+        { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: tribeRedRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+        { id: hostRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
       ],
     });
-    console.log('✓ Created category: 👥 TRIBES');
+    console.log('✓ Created category: 🔴 TRIBE RED (isolated)');
   }
 
-  if (!guild.channels.cache.find(c => c.name === 'tribe-red')) {
-    await guild.channels.create({
-      name: 'tribe-red',
-      type: ChannelType.GuildText,
-      parent: tribesCat.id,
-      topic: 'Red tribe private channel',
-    });
-    console.log('  ✓ Created #tribe-red (hidden)');
+  const redChannels = ['tribe-red-camp', 'tribe-red-challenges', 'tribe-red-tribal'];
+  for (const name of redChannels) {
+    if (!guild.channels.cache.find(c => c.name === name)) {
+      await guild.channels.create({
+        name,
+        type: ChannelType.GuildText,
+        parent: tribeRedCat.id,
+      });
+      console.log(`  ✓ Created #${name}`);
+    }
   }
 
-  if (!guild.channels.cache.find(c => c.name === 'tribe-blue')) {
-    await guild.channels.create({
-      name: 'tribe-blue',
-      type: ChannelType.GuildText,
-      parent: tribesCat.id,
-      topic: 'Blue tribe private channel',
+  // TRIBE BLUE category - ONLY visible to Tribe Blue
+  let tribeBlueCat = guild.channels.cache.find(c => c.name === '🔵 TRIBE BLUE' && c.type === ChannelType.GuildCategory);
+  if (!tribeBlueCat) {
+    tribeBlueCat = await guild.channels.create({
+      name: '🔵 TRIBE BLUE',
+      type: ChannelType.GuildCategory,
+      permissionOverwrites: [
+        { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: tribeBlueRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+        { id: hostRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+      ],
     });
-    console.log('  ✓ Created #tribe-blue (hidden)');
+    console.log('✓ Created category: 🔵 TRIBE BLUE (isolated)');
+  }
+
+  const blueChannels = ['tribe-blue-camp', 'tribe-blue-challenges', 'tribe-blue-tribal'];
+  for (const name of blueChannels) {
+    if (!guild.channels.cache.find(c => c.name === name)) {
+      await guild.channels.create({
+        name,
+        type: ChannelType.GuildText,
+        parent: tribeBlueCat.id,
+      });
+      console.log(`  ✓ Created #${name}`);
+    }
+  }
+
+  // POST-MERGE category - hidden until merge
+  let mergeCat = guild.channels.cache.find(c => c.name === '🏝️ MERGED TRIBE' && c.type === ChannelType.GuildCategory);
+  if (!mergeCat) {
+    mergeCat = await guild.channels.create({
+      name: '🏝️ MERGED TRIBE',
+      type: ChannelType.GuildCategory,
+      permissionOverwrites: [
+        { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: hostRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+      ],
+    });
+    console.log('✓ Created category: 🏝️ MERGED TRIBE (hidden until merge)');
+  }
+
+  const mergeChannels = ['merged-camp', 'merged-challenges', 'merged-tribal'];
+  for (const name of mergeChannels) {
+    if (!guild.channels.cache.find(c => c.name === name)) {
+      await guild.channels.create({
+        name,
+        type: ChannelType.GuildText,
+        parent: mergeCat.id,
+      });
+      console.log(`  ✓ Created #${name}`);
+    }
   }
 
   // SPECTATORS category
@@ -190,6 +203,12 @@ client.once('ready', async () => {
     spectatorsCat = await guild.channels.create({
       name: '👻 SPECTATORS',
       type: ChannelType.GuildCategory,
+      permissionOverwrites: [
+        { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: juryRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+        { id: spectatorRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+        { id: hostRole.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+      ],
     });
     console.log('✓ Created category: 👻 SPECTATORS');
   }
@@ -199,23 +218,9 @@ client.once('ready', async () => {
       name: 'jury',
       type: ChannelType.GuildText,
       parent: spectatorsCat.id,
-      topic: 'Eliminated players - discuss and vote for winner',
-      permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: [PermissionFlagsBits.ViewChannel],
-        },
-        {
-          id: juryRole.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-        },
-        {
-          id: hostRole.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-        },
-      ],
+      topic: 'Eliminated players discuss and vote for winner',
     });
-    console.log('  ✓ Created #jury (jury members only)');
+    console.log('  ✓ Created #jury');
   }
 
   if (!guild.channels.cache.find(c => c.name === 'eliminated-chat')) {
@@ -223,30 +228,22 @@ client.once('ready', async () => {
       name: 'eliminated-chat',
       type: ChannelType.GuildText,
       parent: spectatorsCat.id,
-      topic: 'Watch and discuss',
-      permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: [PermissionFlagsBits.ViewChannel],
-        },
-        {
-          id: juryRole.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-        },
-        {
-          id: spectatorRole.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
-        },
-      ],
+      topic: 'Watch and discuss the game',
     });
     console.log('  ✓ Created #eliminated-chat');
   }
 
   console.log('\n✅ Discord server setup complete!');
+  console.log('\n🔒 TRIBE ISOLATION ENFORCED:');
+  console.log('   • Tribe Red can ONLY see 🔴 TRIBE RED channels');
+  console.log('   • Tribe Blue can ONLY see 🔵 TRIBE BLUE channels');
+  console.log('   • Neither tribe can see the other\'s members in the sidebar');
+  console.log('   • Merged channels hidden until /merge is called');
   console.log('\nNext steps:');
   console.log('1. Assign yourself the @Host role');
-  console.log('2. Pin registration instructions in #announcements');
-  console.log('3. Players use /register to join');
+  console.log('2. Assign players to @Tribe Red or @Tribe Blue');
+  console.log('3. Players cannot see or contact the other tribe');
+  console.log('4. Use /merge when ready to reveal everyone');
 
   process.exit(0);
 });
