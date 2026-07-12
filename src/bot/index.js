@@ -7,6 +7,7 @@ import {
   handleVote,
   handleTribal,
   handleStandings,
+  handleNewSeason,
 } from './commands.js';
 import { handleMerge } from './merge-tribes.js';
 import { triggerBotChat } from './bot-ai.js';
@@ -60,6 +61,10 @@ const commands = [
     name: 'merge',
     description: 'Merge the tribes (host only)',
   },
+  {
+    name: 'newseason',
+    description: 'Reset the game for a new season (host only)',
+  },
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -105,6 +110,8 @@ client.on('interactionCreate', async (interaction) => {
       await handleStandings(interaction);
     } else if (commandName === 'merge') {
       await handleMerge(interaction);
+    } else if (commandName === 'newseason') {
+      await handleNewSeason(interaction);
     }
   } catch (error) {
     console.error(`Error handling ${commandName}:`, error);

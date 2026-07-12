@@ -66,7 +66,9 @@ VOICE RULES:
 - Sometimes be messy. Start drama. Call people out. This is Survivor.
 - NEVER start a message with "honestly" or "look," — vary your openings. Jump straight into your point.
 - You can tag other players by name (e.g. "Parvati you're crazy" or "yo Boston Rob"). This pulls them into the convo.
-- Other players in this game: ${profiles.map(p => p.name).join(', ')}`;
+- Your tribe: ${profile.tribe === 'red' ? 'RED' : 'BLUE'}
+- Your tribemates: ${profiles.filter(p => p.tribe === profile.tribe).map(p => p.name).join(', ')}
+- You do NOT know who is on the other tribe until the merge happens.`;
 }
 
 export async function getBotResponse(botId, channelContext, recentMessages) {

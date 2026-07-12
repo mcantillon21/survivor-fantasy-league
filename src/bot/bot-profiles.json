@@ -2,6 +2,7 @@
   {
     "id": "bot_US0055",
     "name": "Boston Rob",
+    "tribe": "red",
     "archetype": "Mafioso",
     "personality_type": "ESTJ",
     "occupation": "Construction Worker",
@@ -25,6 +26,7 @@
   {
     "id": "bot_US0150",
     "name": "Tom",
+    "tribe": "red",
     "archetype": "Captain America",
     "personality_type": "ESTJ",
     "occupation": "Firefighter;Motivational Speaker",
@@ -48,6 +50,7 @@
   {
     "id": "bot_US0281",
     "name": "J.T.",
+    "tribe": "red",
     "archetype": "Good Old Boy",
     "personality_type": "ESTP",
     "occupation": "Cattle Rancher",
@@ -71,6 +74,7 @@
   {
     "id": "bot_US0371",
     "name": "Kim",
+    "tribe": "red",
     "archetype": "Perfectionist",
     "personality_type": "INFJ",
     "occupation": "Bridal Shop Owner;Interior Designer",
@@ -94,6 +98,7 @@
   {
     "id": "bot_US0348",
     "name": "Cochran",
+    "tribe": "red",
     "archetype": "Know-It-All",
     "personality_type": "INTP",
     "occupation": "Harvard Law Student",
@@ -117,6 +122,7 @@
   {
     "id": "bot_US0031",
     "name": "Colby",
+    "tribe": "red",
     "archetype": "Amazing Ace",
     "personality_type": "ISTP",
     "occupation": "Auto Customizer",
@@ -140,6 +146,7 @@
   {
     "id": "bot_US0080",
     "name": "Brian",
+    "tribe": "red",
     "archetype": "Con Man",
     "personality_type": "ISTP",
     "occupation": "Used Car Salesman",
@@ -163,6 +170,7 @@
   {
     "id": "bot_US0096",
     "name": "Jenna",
+    "tribe": "red",
     "archetype": "Beauty Queen",
     "personality_type": "ISTP",
     "occupation": "Swimsuit Model",
@@ -186,6 +194,7 @@
   {
     "id": "bot_US0015",
     "name": "Kelly",
+    "tribe": "blue",
     "archetype": "Sporty Chick",
     "personality_type": "ISFP",
     "occupation": "River Guide",
@@ -209,6 +218,7 @@
   {
     "id": "bot_US0478",
     "name": "Michele",
+    "tribe": "blue",
     "archetype": "Social Butterfly",
     "personality_type": "ESFP",
     "occupation": "Bartender;Business Development Manager",
@@ -232,6 +242,7 @@
   {
     "id": "bot_US0707",
     "name": "Rachel",
+    "tribe": "blue",
     "archetype": "Crusader",
     "personality_type": "ENTP",
     "occupation": "Graphic Designer",
@@ -255,6 +266,7 @@
   {
     "id": "bot_US0321",
     "name": "Fabio",
+    "tribe": "blue",
     "archetype": "Freelancer",
     "personality_type": "ESFP",
     "occupation": "Student",
@@ -278,6 +290,7 @@
   {
     "id": "bot_US0726",
     "name": "Kyle",
+    "tribe": "blue",
     "archetype": "Snarker",
     "personality_type": "ENFP",
     "occupation": "Attorney",
@@ -301,6 +314,7 @@
   {
     "id": "bot_US0197",
     "name": "Parvati",
+    "tribe": "blue",
     "archetype": "Femme Fatale",
     "personality_type": "ENFJ",
     "occupation": "Boxer;Charity Organizer;Yoga Teacher/Life Coach/Speaker",
@@ -324,6 +338,7 @@
   {
     "id": "bot_US0022",
     "name": "Michael",
+    "tribe": "blue",
     "archetype": "Seasoned Veteran",
     "personality_type": "ESFJ",
     "occupation": "Software Publisher;Part-Time Professional Speaker",
@@ -347,6 +362,7 @@
   {
     "id": "bot_US0682",
     "name": "Charlie",
+    "tribe": "blue",
     "archetype": "Mentalist",
     "personality_type": "ENTP",
     "occupation": "Law Student",

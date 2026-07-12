@@ -72,7 +72,7 @@ export async function handleRegister(interaction) {
 
 export async function handleChallenge(interaction) {
   await interaction.reply({
-    content: '🔥 **IMMUNITY CHALLENGE**\n\nHead to the challenge arena:\nhttps://survivor-fantasy-league-pi.vercel.app/challenge\n\nYou have 10 minutes. Winners are safe at Tribal Council.',
+    content: '🔥 **IMMUNITY CHALLENGE**\n\nHead to the challenge arena:\nhttps://web-five-psi-52.vercel.app/challenge\n\nYou have 10 minutes. Winners are safe at Tribal Council.',
   });
 }
 
@@ -133,9 +133,50 @@ export async function handleVote(interaction) {
     return;
   }
 
+  // Pre-merge: can only vote within your own tribe
+  const { data: gameState } = await supabase
+    .from('game_state')
+    .select('merged')
+    .single();
+
+  const isMerged = gameState?.merged || false;
+
+  if (!isMerged && voterData.tribe !== targetData.tribe) {
+    await interaction.reply({
+      content: 'You can only vote for players on your own tribe.',
+      ephemeral: true,
+    });
+    return;
+  }
+
   if (targetData.has_immunity) {
     await interaction.reply({
-      content: `${target.username} has immunity. You cannot vote for them.`,
+      content: `That player has immunity and cannot be voted out.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Check for existing vote this round (one vote per tribal)
+  const { data: existingVote } = await supabase
+    .from('votes')
+    .select('*')
+    .eq('voter_id', voter)
+    .eq('tribal_council_id', voterData.tribe === 'red' && !isMerged ? 'tribal-red' : voterData.tribe === 'blue' && !isMerged ? 'tribal-blue' : 'tribal-merged')
+    .single();
+
+  const tribalId = isMerged ? 'tribal-merged' : `tribal-${voterData.tribe}`;
+
+  if (existingVote) {
+    // Update existing vote
+    await supabase
+      .from('votes')
+      .update({ target_id: target.id })
+      .eq('voter_id', voter)
+      .eq('tribal_council_id', tribalId);
+
+    await interaction.reply({
+      content: `Your vote has been changed. No one will know.`,
       ephemeral: true,
     });
     return;
@@ -144,13 +185,13 @@ export async function handleVote(interaction) {
   const { error } = await supabase.from('votes').insert({
     voter_id: voter,
     target_id: target.id,
-    tribal_council_id: 1,
+    tribal_council_id: tribalId,
   });
 
   if (error) throw error;
 
   await interaction.reply({
-    content: `Your vote for ${target.username} has been cast.`,
+    content: `Your vote has been cast. It is a secret.`,
     ephemeral: true,
   });
 }
@@ -158,7 +199,18 @@ export async function handleVote(interaction) {
 export async function handleTribal(interaction) {
   await interaction.deferReply();
 
-  const result = await tallyVotes(1);
+  // Determine which tribal this is based on channel
+  const channelName = interaction.channel.name;
+  let tribalId;
+  if (channelName.includes('red')) {
+    tribalId = 'tribal-red';
+  } else if (channelName.includes('blue')) {
+    tribalId = 'tribal-blue';
+  } else {
+    tribalId = 'tribal-merged';
+  }
+
+  const result = await tallyVotes(tribalId);
 
   if (!result) {
     await interaction.editReply('No votes have been cast yet.');
@@ -168,6 +220,9 @@ export async function handleTribal(interaction) {
   const narration = await narrateTribalCouncil(result.votes);
 
   await eliminatePlayer(result.eliminated);
+
+  // Clear votes for this tribal
+  await supabase.from('votes').delete().eq('tribal_council_id', tribalId);
 
   const { data: eliminatedPlayer } = await supabase
     .from('players')
@@ -184,6 +239,40 @@ export async function handleTribal(interaction) {
   message += `\n**${eliminatedPlayer?.username || 'Player'}, the tribe has spoken. 🔦**`;
 
   await interaction.editReply(message);
+}
+
+export async function handleNewSeason(interaction) {
+  await interaction.deferReply();
+
+  // Reset all players
+  await supabase.from('votes').delete().neq('voter_id', '');
+  await supabase.from('challenges').delete().neq('player_id', '');
+  await supabase.from('players').delete().neq('discord_id', '');
+  await supabase.from('game_state').upsert({ id: 'current', merged: false, season: 1 });
+
+  // Strip tribe roles from all members
+  const guild = interaction.guild;
+  const tribeRedRole = guild.roles.cache.find(r => r.name === 'Tribe Red');
+  const tribeBlueRole = guild.roles.cache.find(r => r.name === 'Tribe Blue');
+
+  if (tribeRedRole || tribeBlueRole) {
+    const members = await guild.members.fetch();
+    for (const [, member] of members) {
+      if (tribeRedRole && member.roles.cache.has(tribeRedRole.id)) {
+        await member.roles.remove(tribeRedRole);
+      }
+      if (tribeBlueRole && member.roles.cache.has(tribeBlueRole.id)) {
+        await member.roles.remove(tribeBlueRole);
+      }
+    }
+  }
+
+  await interaction.editReply(
+    '🌅 **NEW SEASON**\n\n' +
+    'All players, votes, and challenges have been reset.\n' +
+    'Tribe roles have been stripped.\n\n' +
+    'Use `/register` to join the new season.'
+  );
 }
 
 export async function handleStandings(interaction) {
