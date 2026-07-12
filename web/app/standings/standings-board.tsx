@@ -11,14 +11,29 @@ interface Player {
   tribe: string | null;
   is_eliminated: boolean;
   has_immunity: boolean;
+  is_juror: boolean;
   avatar_url: string | null;
   created_at: string;
 }
+
+interface GameState {
+  phase: string;
+  current_round: number;
+  winner_discord_id: string | null;
+}
+
+const PHASE_LABELS: Record<string, string> = {
+  tribe: 'Tribe phase',
+  individual: 'Individual · merged',
+  final: 'Final · jury vote',
+  ended: 'Game over',
+};
 
 type StandingsState = 'loading' | 'ready' | 'error';
 
 export function StandingsBoard({ gameId, gameName }: { gameId: string; gameName: string }) {
   const [players, setPlayers] = useState<Player[]>([]);
+  const [gameState, setGameState] = useState<GameState | null>(null);
   const [state, setState] = useState<StandingsState>('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -34,14 +49,14 @@ export function StandingsBoard({ gameId, gameName }: { gameId: string; gameName:
     }
 
     try {
-      const { data, error } = await supabase
-        .from('players')
-        .select('*')
-        .eq('game_id', gameId)
-        .order('created_at', { ascending: true });
+      const [{ data, error }, { data: stateData }] = await Promise.all([
+        supabase.from('players').select('*').eq('game_id', gameId).order('created_at', { ascending: true }),
+        supabase.from('game_state').select('phase, current_round, winner_discord_id').eq('game_id', gameId).maybeSingle(),
+      ]);
 
       if (error) throw error;
       setPlayers(data || []);
+      setGameState(stateData || null);
       setState('ready');
     } catch (error) {
       console.error('Failed to fetch players:', error);
@@ -56,7 +71,10 @@ export function StandingsBoard({ gameId, gameName }: { gameId: string; gameName:
   }, [fetchPlayers]);
 
   const alive = players.filter((player) => !player.is_eliminated);
-  const eliminated = players.filter((player) => player.is_eliminated);
+  const jurors = players.filter((player) => player.is_eliminated && player.is_juror);
+  const eliminated = players.filter((player) => player.is_eliminated && !player.is_juror);
+  const winner = gameState?.winner_discord_id ? players.find((p) => p.discord_id === gameState.winner_discord_id) : null;
+  const phaseLabel = gameState ? PHASE_LABELS[gameState.phase] ?? gameState.phase : null;
   const avatar = (player: Player) => player.avatar_url ? (
     <Image className="cast-player__avatar" src={player.avatar_url} alt="" width={44} height={44} />
   ) : (
@@ -69,7 +87,13 @@ export function StandingsBoard({ gameId, gameName }: { gameId: string; gameName:
     <div className="minimal-page standings-page page-enter">
       <div className="minimal-scene" aria-hidden="true" />
       <section className="minimal-shell minimal-shell--wide" aria-labelledby="standings-title">
-        <header className="minimal-heading"><p>{gameName}</p><h1 id="standings-title">Standings.</h1></header>
+        <header className="minimal-heading"><p>{gameName}{phaseLabel ? ` · ${phaseLabel} · Round ${gameState?.current_round}` : ''}</p><h1 id="standings-title">Standings.</h1></header>
+
+        {state === 'ready' && winner && (
+          <section className="standings-state glass-panel" style={{ textAlign: 'center' }} aria-label="Winner">
+            <p className="section-kicker">👑 Sole Survivor</p><h2>{winner.username} wins.</h2>
+          </section>
+        )}
 
         {state === 'loading' && (
           <div className="cast-pane glass-panel" aria-label="Loading standings" aria-busy="true">
@@ -105,9 +129,25 @@ export function StandingsBoard({ gameId, gameName }: { gameId: string; gameName:
               </ol>
             </section>
 
+            {jurors.length > 0 && (
+              <section className="cast-board cast-board--eliminated" aria-labelledby="jury-cast-title">
+                <div className="cast-board__heading"><h2 id="jury-cast-title">Jury</h2><span>{jurors.length}</span></div>
+                <ol className="cast-list">
+                  {jurors.map((player, index) => (
+                    <li key={player.id} className="cast-player cast-player--eliminated">
+                      <span className="cast-player__number">{String(index + 1).padStart(2, '0')}</span>
+                      {avatar(player)}
+                      <div className="cast-player__identity"><strong>{player.username}</strong><span>{player.tribe || 'Juror'}</span></div>
+                      <span className="status-badge">Juror</span>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
             {eliminated.length > 0 && (
               <section className="cast-board cast-board--eliminated" aria-labelledby="eliminated-cast-title">
-                <div className="cast-board__heading"><h2 id="eliminated-cast-title">Eliminated</h2><span>{eliminated.length}</span></div>
+                <div className="cast-board__heading"><h2 id="eliminated-cast-title">Pre-merge boots</h2><span>{eliminated.length}</span></div>
                 <ol className="cast-list">
                   {eliminated.map((player, index) => (
                     <li key={player.id} className="cast-player cast-player--eliminated">
