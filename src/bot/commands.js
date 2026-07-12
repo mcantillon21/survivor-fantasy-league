@@ -389,3 +389,44 @@ export async function handleStandings(interaction) {
   if (boots.length) { msg += `\n**Pre-merge boots (${boots.length}):**\n`; boots.forEach((p) => (msg += `• ${p.username}\n`)); }
   await interaction.reply(msg);
 }
+
+// ---------------------------------------------------------------------------
+// Nightly auto-challenge — posts one random challenge to every live game's
+// #challenge-lobby at 7:30pm local time (override with CHALLENGE_HOUR/MINUTE).
+// ---------------------------------------------------------------------------
+export async function postNightlyChallenges(client) {
+  const { data: games } = await supabase.from('games').select('*').eq('status', 'live');
+  for (const game of games || []) {
+    const state = await getGameState(game.id);
+    if (!state || !['tribe', 'individual'].includes(state.phase)) continue; // skip final/ended/setup
+
+    const slug = CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
+    await updateGameState(game.id, { active_challenge: slug });
+
+    const guild = game.discord_guild_id ? client.guilds.cache.get(game.discord_guild_id) : null;
+    if (!guild) continue;
+    const teamLine = state.phase === 'tribe'
+      ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
+      : 'Every player for themselves. Only the top scorer is safe.';
+    await post(guild, CH.lobby,
+      `🌙 **TONIGHT'S IMMUNITY CHALLENGE**\n\n${teamLine}\n\nEveryone plays the same challenge — enter here:\n${CHALLENGE_BASE}/${game.code}/challenge`);
+  }
+}
+
+export function startNightlyScheduler(client) {
+  const hour = Number(process.env.CHALLENGE_HOUR ?? 19);
+  const minute = Number(process.env.CHALLENGE_MINUTE ?? 30);
+  const run = async () => {
+    try { await postNightlyChallenges(client); } catch (e) { console.error('Nightly challenge failed:', e.message); }
+  };
+  const scheduleNext = () => {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(hour, minute, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    const ms = next.getTime() - now.getTime();
+    console.log(`⏰ Next nightly challenge: ${next.toLocaleString()}`);
+    setTimeout(async () => { await run(); scheduleNext(); }, ms);
+  };
+  scheduleNext();
+}
