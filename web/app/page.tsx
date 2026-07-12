@@ -2,35 +2,65 @@ import Link from 'next/link';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-8">
-      <div className="text-center max-w-2xl">
-        <h1 className="text-9xl md:text-[10rem] font-survivor font-black text-orange-500 mb-8 tracking-tighter uppercase leading-none">
-          SURVIVOR
-        </h1>
-        <p className="text-xl text-gray-400 mb-12 uppercase tracking-[0.2em] font-medium">
-          Fantasy League
-        </p>
-        <p className="text-gray-400 mb-16 max-w-lg mx-auto text-base leading-relaxed">
-          AI-hosted game. Compete in challenges, form alliances, vote players out. Claude AI refs the entire thing.
-        </p>
-        <div className="space-y-4 max-w-md mx-auto">
-          <Link
-            href="/challenge"
-            className="block bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 px-8 rounded-lg transition-all uppercase tracking-wide active:scale-[0.96]"
-          >
-            Enter Challenge Arena
-          </Link>
-          <Link
-            href="/standings"
-            className="block bg-transparent hover:bg-white/5 border border-orange-500/50 text-orange-400 font-bold py-4 px-8 rounded-lg transition-all uppercase tracking-wide active:scale-[0.96]"
-          >
-            View Standings
-          </Link>
+    <div className="home-page page-enter">
+      <div className="ambient-fire ambient-fire--home" aria-hidden="true" />
+      <section className="home-hero" aria-labelledby="home-title">
+        <div className="home-hero__copy">
+          <p className="eyebrow"><span /> Challenge night</p>
+          <h1 id="home-title" className="display-title">
+            Your game is<br />about to change.
+          </h1>
+          <p className="hero-copy">
+            Step into tonight&apos;s immunity challenge. Ten decisions stand between
+            you and safety at Tribal Council.
+          </p>
+          <div className="hero-actions">
+            <Link href="/challenge" className="button button--primary">
+              Enter the arena <span aria-hidden="true">→</span>
+            </Link>
+            <Link href="/standings" className="button button--ghost">
+              View standings
+            </Link>
+          </div>
         </div>
-        <p className="text-gray-600 text-sm mt-16 tracking-wide">
-          Register via Discord • /register to join
-        </p>
-      </div>
+
+        <aside className="challenge-brief glass-panel" aria-label="Tonight's challenge briefing">
+          <div className="challenge-brief__topline">
+            <span className="live-indicator"><i /> Arena open</span>
+            <span className="challenge-brief__number">01</span>
+          </div>
+          <div className="challenge-brief__body">
+            <p className="section-kicker">Tonight&apos;s challenge</p>
+            <h2>Outthink<br />the island.</h2>
+            <p>
+              Survivor strategy trivia. Accuracy builds your base score. Fast
+              answers earn the edge.
+            </p>
+          </div>
+          <dl className="challenge-facts">
+            <div><dt>Questions</dt><dd>10</dd></div>
+            <div><dt>Clock</dt><dd>60s</dd></div>
+            <div><dt>Format</dt><dd>Solo</dd></div>
+          </dl>
+        </aside>
+      </section>
+
+      <section className="field-notes" aria-label="How challenge night works">
+        <p className="field-notes__label">Field notes / 001</p>
+        <div className="field-notes__rule" />
+        <div className="field-notes__item">
+          <span>01</span>
+          <p>Register in Discord with <strong>/register</strong> before entering.</p>
+        </div>
+        <div className="field-notes__item">
+          <span>02</span>
+          <p>Use the same Discord username so your result reaches the right player.</p>
+        </div>
+        <div className="field-notes__item">
+          <span>03</span>
+          <p>Once the clock starts, trust your read. Speed and accuracy both count.</p>
+        </div>
+      </section>
     </div>
   );
 }
