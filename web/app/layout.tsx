@@ -67,7 +67,6 @@ export default function RootLayout({
           </main>
           <footer className="site-footer">
             <span>Outwit. Outplay. Outscore.</span>
-            <span>Challenge night lives here.</span>
           </footer>
         </div>
       </body>

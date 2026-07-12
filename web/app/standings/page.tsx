@@ -56,51 +56,44 @@ export default function StandingsPage() {
   const eliminated = players.filter((player) => player.is_eliminated);
 
   return (
-    <div className="standings-page page-enter">
-      <div className="ambient-fire ambient-fire--standings" aria-hidden="true" />
-      <header className="standings-heading">
-        <div>
-          <p className="eyebrow"><span /> Cast board</p>
-          <h1 className="display-title">Still in<br />the game.</h1>
-        </div>
-        <p>
-          Immunity changes the vote. Alliances change everything else. See who
-          remains before the tribe heads to council.
-        </p>
-      </header>
+    <div className="minimal-page standings-page page-enter">
+      <div className="minimal-scene" aria-hidden="true" />
+      <section className="minimal-shell minimal-shell--wide" aria-labelledby="standings-title">
+        <header className="minimal-heading">
+          <p>League</p>
+          <h1 id="standings-title">Standings.</h1>
+        </header>
 
       {state === 'loading' && (
-        <section className="cast-board" aria-label="Loading standings" aria-busy="true">
-          <div className="cast-board__heading"><span>In the game</span><span>Loading cast…</span></div>
+        <div className="cast-pane glass-panel" aria-label="Loading standings" aria-busy="true">
+          <div className="cast-board__heading"><span>Players</span><span>Loading…</span></div>
           <div className="skeleton-row" /><div className="skeleton-row" /><div className="skeleton-row" />
-        </section>
+        </div>
       )}
 
       {state === 'error' && (
         <section className="standings-state glass-panel" role="alert">
-          <p className="section-kicker">Signal lost</p>
-          <h2>The cast board went dark.</h2>
+          <h2>Couldn&apos;t load standings.</h2>
           <p>{errorMessage}</p>
           <button type="button" className="button button--primary" onClick={() => void fetchPlayers()}>
-            Try standings again
+            Try again
           </button>
         </section>
       )}
 
       {state === 'ready' && players.length === 0 && (
         <section className="standings-state glass-panel">
-          <p className="section-kicker">Camp is quiet</p>
-          <h2>No players have arrived.</h2>
-          <p>Register with <strong>/register</strong> in Discord to take the first spot on the cast board.</p>
+          <h2>No players yet.</h2>
+          <p>Register with <strong>/register</strong> in Discord.</p>
         </section>
       )}
 
       {state === 'ready' && players.length > 0 && (
-        <div className="cast-sections">
+        <div className="cast-sections cast-pane glass-panel">
           <section className="cast-board" aria-labelledby="active-cast-title">
             <div className="cast-board__heading">
-              <h2 id="active-cast-title">In the game</h2>
-              <span>{alive.length} remaining</span>
+              <h2 id="active-cast-title">Active</h2>
+              <span>{alive.length}</span>
             </div>
             <ol className="cast-list">
               {alive.map((player, index) => (
@@ -112,7 +105,6 @@ export default function StandingsPage() {
                   </div>
                   <div className="cast-player__status">
                     {player.has_immunity && <span className="status-badge status-badge--immunity"><i /> Immunity</span>}
-                    <span className="status-badge">Active</span>
                   </div>
                 </li>
               ))}
@@ -122,8 +114,8 @@ export default function StandingsPage() {
           {eliminated.length > 0 && (
             <section className="cast-board cast-board--eliminated" aria-labelledby="eliminated-cast-title">
               <div className="cast-board__heading">
-                <h2 id="eliminated-cast-title">Torch snuffed</h2>
-                <span>{eliminated.length} eliminated</span>
+                <h2 id="eliminated-cast-title">Eliminated</h2>
+                <span>{eliminated.length}</span>
               </div>
               <ol className="cast-list">
                 {eliminated.map((player, index) => (
@@ -141,6 +133,7 @@ export default function StandingsPage() {
           )}
         </div>
       )}
+      </section>
     </div>
   );
 }
