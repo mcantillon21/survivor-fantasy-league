@@ -18,6 +18,10 @@ Make interactive states feel deliberate and cinematic without adding visual nois
 
 Apply the system to navigation, challenge rows, buttons, answer choices, symbol controls, maze controls, command items, supply choices, back links, and compact text links. Static standings rows remain static because they are not interactive.
 
+## Home hero backdrop
+
+Mirror the original torch artwork across the far left and right sides of the home hero. Keep both torches symmetrical and slightly more visible than the current backdrop, while preserving a deep central falloff behind the heading and glass pane. Other pages retain the quieter single-image treatment.
+
 ## Verification
 
 Check desktop hover, keyboard focus, active press, touch behavior, reduced-motion behavior, and mobile overflow. Confirm all challenge routes still render and build successfully.
