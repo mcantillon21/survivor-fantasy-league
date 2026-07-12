@@ -6,7 +6,7 @@ Support multiple Survivor games at the same time while keeping every season's pl
 
 ## Public lobby
 
-The public `/` route becomes a neutral entry lobby. It retains the symmetric torch hero and adds a compact official Survivor logo lockup above the heading. The centered glass pane contains a game-code field instead of an immediate challenge action. A valid code routes to the matching season; invalid and ended codes receive clear states.
+The public `/` route becomes a neutral entry lobby. It retains the symmetric torch hero and adds the supplied classic Survivor oval above the heading, framed by mirrored versions of the supplied botanical SVG path. The centered glass pane contains a game-code field instead of an immediate challenge action. A valid code routes to the matching season; invalid and ended codes receive clear states.
 
 ## Season routes and navigation
 
