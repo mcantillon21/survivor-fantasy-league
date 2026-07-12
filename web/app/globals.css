@@ -1038,28 +1038,45 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: clamp(0.65rem, 2vw, 1.15rem);
+  gap: 0;
   margin-bottom: 1rem;
   color: var(--bone-400);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.08em;
+  transition: transform 300ms ease;
 }
 .hero-logo__mark {
   display: block;
-  width: clamp(5.5rem, 8vw, 7.25rem);
+  width: clamp(6.5rem, 10vw, 9rem);
   aspect-ratio: 16 / 9;
   background: url('/images/survivor-logo.png') center / contain no-repeat;
 }
 .hero-logo__branch {
-  width: clamp(2.2rem, 4vw, 3rem);
-  height: clamp(2.2rem, 4vw, 3rem);
+  width: clamp(2.5rem, 4vw, 3.5rem);
+  height: clamp(2.5rem, 4vw, 3.5rem);
   flex: 0 0 auto;
   fill: currentColor;
   opacity: 0.72;
-  transform: rotate(-68deg);
+  transition: color 500ms ease, filter 500ms ease, transform 500ms ease;
 }
-.hero-logo__branch--mirrored { transform: scaleX(-1) rotate(-68deg); }
+.hero-logo__branch--left {
+  margin-right: -0.2rem;
+  transform: translateX(2px);
+}
+.hero-logo__branch--right {
+  margin-left: -0.2rem;
+  transform: translateX(-2px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .hero-logo:hover { transform: scale(1.02); }
+  .hero-logo:hover .hero-logo__branch {
+    color: var(--ember-300);
+    filter: drop-shadow(0 0.2rem 0.45rem oklch(66% 0.2 45 / 0.2));
+  }
+  .hero-logo:hover .hero-logo__branch--left { transform: translateX(0) scale(1.02); }
+  .hero-logo:hover .hero-logo__branch--right { transform: translateX(0) scale(1.02); }
+}
 .central-pane--entry h2,
 .state-pane h2 { margin: 0 0 0.45rem; }
 .central-pane--entry { padding: clamp(1.35rem, 4vw, 2rem); }
