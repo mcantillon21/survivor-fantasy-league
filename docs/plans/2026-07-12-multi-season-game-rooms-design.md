@@ -35,6 +35,10 @@ The migration creates one default game and assigns every existing player, vote, 
 
 One current season is supported per Discord server, while any number of separate Discord servers can run concurrently.
 
+## Discord profiles
+
+Player records store the current Discord username and avatar URL. Registration refreshes an existing player's profile instead of returning without an update, and the Discord `/standings` command refreshes human guild members before displaying results. Web standings show the avatar beside the username and use an initials fallback for simulated castaways or unavailable Discord profiles.
+
 ## Challenge behavior
 
 The official challenge is stored per game. Practice challenges remain available after the season starts but never write scores. Official scores include `game_id`, and the browser attempt key also includes the game code so the same person can participate independently in different seasons.
