@@ -1,56 +1,61 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CHALLENGES, getChallenge, type ChallengeDefinition } from '@/lib/challenges/catalog';
+import { getChallenge, type ChallengeDefinition } from '@/lib/challenges/catalog';
+import { getSupabaseClient } from '@/lib/supabase';
 import { ChallengeRunner } from './components/challenge-runner';
 
-// The camp page. Players never see the full list of challenges — one is picked
-// for them and run immediately. The pick is locked in sessionStorage so a
-// reload can't reshuffle to an easier game. A host can force a specific
-// challenge for everyone by sharing a link with ?c=<slug>.
-const PICK_KEY = 'sfl:camp:pick';
-
+// The camp page. The host picks ONE challenge for the round (stored in
+// game_state.active_challenge by the Discord bot's /challenge command), and
+// every player runs that same challenge here. Players never see the full list.
 export default function CampChallengePage() {
   const [challenge, setChallenge] = useState<ChallengeDefinition | null>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'none'>('loading');
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const override = params.get('c');
-    if (override) {
-      const forced = getChallenge(override);
-      if (forced) {
-        setChallenge(forced);
-        return;
+    let active = true;
+    (async () => {
+      // Host testing override: /challenge?c=<slug>
+      const override = new URLSearchParams(window.location.search).get('c');
+      if (override) {
+        const forced = getChallenge(override);
+        if (forced && active) { setChallenge(forced); setStatus('ready'); return; }
       }
-    }
 
-    try {
-      const stored = window.sessionStorage.getItem(PICK_KEY);
-      const existing = stored ? getChallenge(stored) : undefined;
-      if (existing) {
-        setChallenge(existing);
-        return;
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        try {
+          const { data } = await supabase.from('game_state').select('active_challenge').eq('id', 1).single();
+          const picked = data?.active_challenge ? getChallenge(data.active_challenge) : undefined;
+          if (picked && active) { setChallenge(picked); setStatus('ready'); return; }
+        } catch (error) {
+          console.error('Failed to read active challenge:', error);
+        }
       }
-    } catch {
-      // sessionStorage unavailable — fall through to a fresh pick
-    }
-
-    const picked = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
-    try {
-      window.sessionStorage.setItem(PICK_KEY, picked.slug);
-    } catch {
-      // ignore persistence failures
-    }
-    setChallenge(picked);
+      if (active) setStatus('none');
+    })();
+    return () => { active = false; };
   }, []);
 
-  if (!challenge) {
+  if (status === 'loading') {
     return (
       <div className="minimal-page game-page page-enter">
         <div className="minimal-scene" aria-hidden="true" />
-        <div className="runner-shell">
-          <p style={{ textAlign: 'center', opacity: 0.7 }}>Drawing tonight&apos;s challenge…</p>
-        </div>
+        <div className="runner-shell"><p style={{ textAlign: 'center', opacity: 0.7 }}>Loading tonight&apos;s challenge…</p></div>
+      </div>
+    );
+  }
+
+  if (status === 'none' || !challenge) {
+    return (
+      <div className="minimal-page challenge-entry page-enter">
+        <div className="minimal-scene" aria-hidden="true" />
+        <section className="runner-shell runner-shell--entry">
+          <div className="entry-card glass-panel" style={{ textAlign: 'center' }}>
+            <h1>No challenge yet.</h1>
+            <p>The host hasn&apos;t started a challenge. Watch <strong>#challenge-lobby</strong> in Discord — when the host runs <strong>/challenge</strong>, come back here and the same challenge will be waiting for everyone.</p>
+          </div>
+        </section>
       </div>
     );
   }

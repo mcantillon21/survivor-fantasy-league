@@ -1,15 +1,18 @@
-import { Client, GatewayIntentBits, REST, Routes } from 'discord.js';
+import { Client, GatewayIntentBits, REST, Routes, MessageFlags } from 'discord.js';
 import { config } from 'dotenv';
 import {
   handleRegister,
+  handleStart,
   handleChallenge,
   handleResults,
   handleVote,
   handleTribal,
+  handleFinalTribal,
+  handleMerge,
   handleStandings,
   handleNewSeason,
+  handleEndgame,
 } from './commands.js';
-import { handleMerge } from './merge-tribes.js';
 import { triggerBotChat } from './bot-ai.js';
 import { startBotLife } from './bot-life.js';
 
@@ -28,6 +31,10 @@ const commands = [
   {
     name: 'register',
     description: 'Join the Survivor game',
+  },
+  {
+    name: 'start',
+    description: '(Host) Assign tribes and begin the game',
   },
   {
     name: 'challenge',
@@ -62,8 +69,16 @@ const commands = [
     description: 'Merge the tribes (host only)',
   },
   {
+    name: 'finaltribal',
+    description: '(Host) Final three face the jury',
+  },
+  {
     name: 'newseason',
     description: 'Reset the game for a new season (host only)',
+  },
+  {
+    name: 'endgame',
+    description: '(Host) End the game — lock channels read-only',
   },
 ];
 
@@ -98,6 +113,8 @@ client.on('interactionCreate', async (interaction) => {
   try {
     if (commandName === 'register') {
       await handleRegister(interaction);
+    } else if (commandName === 'start') {
+      await handleStart(interaction);
     } else if (commandName === 'challenge') {
       await handleChallenge(interaction);
     } else if (commandName === 'results') {
@@ -106,27 +123,36 @@ client.on('interactionCreate', async (interaction) => {
       await handleVote(interaction);
     } else if (commandName === 'tribal') {
       await handleTribal(interaction);
+    } else if (commandName === 'finaltribal') {
+      await handleFinalTribal(interaction);
     } else if (commandName === 'standings') {
       await handleStandings(interaction);
     } else if (commandName === 'merge') {
       await handleMerge(interaction);
     } else if (commandName === 'newseason') {
       await handleNewSeason(interaction);
+    } else if (commandName === 'endgame') {
+      await handleEndgame(interaction);
     }
   } catch (error) {
     console.error(`Error handling ${commandName}:`, error);
-    await interaction.reply({
-      content: 'Something went wrong. Try again.',
-      ephemeral: true,
-    });
+    // Never let a failed error-reply crash the process.
+    try {
+      const payload = { content: 'Something went wrong. Try again.', flags: MessageFlags.Ephemeral };
+      if (interaction.deferred || interaction.replied) await interaction.followUp(payload);
+      else await interaction.reply(payload);
+    } catch (replyError) {
+      console.error('Could not deliver error message:', replyError.code || replyError);
+    }
   }
 });
 
+client.on('error', (err) => console.error('Client error:', err));
+process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
+
 // Bot players respond to messages in game channels
 const CHAT_CHANNELS = [
-  'tribe-red-camp', 'tribe-red-challenges', 'tribe-red-tribal',
-  'tribe-blue-camp', 'tribe-blue-challenges', 'tribe-blue-tribal',
-  'merged-camp', 'merged-challenges', 'merged-tribal',
+  'camp', 'challenge-lobby', 'tribe-red', 'tribe-blue', 'spectators', 'ponderosa',
 ];
 let messageBuffer = [];
 let chatCooldown = false;

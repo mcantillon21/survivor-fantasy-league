@@ -105,9 +105,24 @@ export function ChallengeRunner({ challenge, forceOfficial = false }: { challeng
     }
 
     try {
+      // Tag the submission with the player's tribe and the current round so the
+      // referee can score per round and, in the tribe phase, sum by tribe.
+      let tribe: string | null = null;
+      let round = 1;
+      try {
+        const { data: gs } = await supabase.from('game_state').select('current_round').eq('id', 1).single();
+        if (gs?.current_round) round = gs.current_round;
+        const { data: playerRow } = await supabase.from('players').select('tribe').eq('username', username.trim()).single();
+        if (playerRow?.tribe) tribe = playerRow.tribe;
+      } catch (lookupError) {
+        console.error('Failed to look up tribe/round:', lookupError);
+      }
+
       const { error: saveError } = await supabase.from('challenges').insert({
         challenge_type: challenge.slug,
         player_id: username.trim(),
+        tribe,
+        round,
         score: finalScore,
       });
       if (saveError) {
