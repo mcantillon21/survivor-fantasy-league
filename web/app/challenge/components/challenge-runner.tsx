@@ -18,8 +18,8 @@ interface StoredAttempt {
   score?: number;
 }
 
-export function ChallengeRunner({ challenge }: { challenge: ChallengeDefinition }) {
-  const official = isOfficialChallenge(challenge.slug);
+export function ChallengeRunner({ challenge, forceOfficial = false }: { challenge: ChallengeDefinition; forceOfficial?: boolean }) {
+  const official = forceOfficial || isOfficialChallenge(challenge.slug);
   const [phase, setPhase] = useState<RunnerPhase>('briefing');
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');

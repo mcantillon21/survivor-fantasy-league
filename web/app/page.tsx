@@ -1,9 +1,6 @@
 import Link from 'next/link';
-import { CHALLENGES, OFFICIAL_CHALLENGE_SLUG } from '@/lib/challenges/catalog';
 
 export default function Home() {
-  const official = CHALLENGES.find((challenge) => challenge.slug === OFFICIAL_CHALLENGE_SLUG)!;
-
   return (
     <div className="minimal-page home-page page-enter">
       <div className="minimal-scene" aria-hidden="true" />
@@ -14,16 +11,15 @@ export default function Home() {
         </header>
 
         <div className="central-pane glass-panel">
-          <div className="pane-status"><span><i /> Official</span><span>{official.duration}</span></div>
-          <h2>{official.name}</h2>
-          <p>{official.tagline}</p>
-          <Link href={`/challenge/${official.slug}`} className="button button--primary button--full">
-            Play now <span aria-hidden="true">→</span>
+          <div className="pane-status"><span><i /> Immunity challenge</span><span>Live</span></div>
+          <h2>The tribe is waiting.</h2>
+          <p>Your challenge is drawn at random when you enter. You won&apos;t know which one until you begin.</p>
+          <Link href="/challenge" className="button button--primary button--full">
+            Enter the challenge <span aria-hidden="true">→</span>
           </Link>
         </div>
 
         <div className="minimal-links">
-          <Link href="/challenge">All challenges</Link>
           <Link href="/standings">Standings</Link>
         </div>
       </section>

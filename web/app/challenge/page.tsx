@@ -1,39 +1,59 @@
-import Link from 'next/link';
-import { CHALLENGES, OFFICIAL_CHALLENGE_SLUG } from '@/lib/challenges/catalog';
+'use client';
 
-export default function ChallengeVaultPage() {
-  const official = CHALLENGES.find((challenge) => challenge.slug === OFFICIAL_CHALLENGE_SLUG)!;
-  const practice = CHALLENGES.filter((challenge) => challenge.slug !== OFFICIAL_CHALLENGE_SLUG);
+import { useEffect, useState } from 'react';
+import { CHALLENGES, getChallenge, type ChallengeDefinition } from '@/lib/challenges/catalog';
+import { ChallengeRunner } from './components/challenge-runner';
 
-  return (
-    <div className="minimal-page vault-page page-enter">
-      <div className="minimal-scene" aria-hidden="true" />
-      <section className="minimal-shell minimal-shell--wide" aria-labelledby="vault-title">
-        <header className="minimal-heading">
-          <p>Challenge vault</p>
-          <h1 id="vault-title">Choose your game.</h1>
-        </header>
+// The camp page. Players never see the full list of challenges — one is picked
+// for them and run immediately. The pick is locked in sessionStorage so a
+// reload can't reshuffle to an easier game. A host can force a specific
+// challenge for everyone by sharing a link with ?c=<slug>.
+const PICK_KEY = 'sfl:camp:pick';
 
-        <div className="vault-pane glass-panel">
-          <Link href={`/challenge/${official.slug}`} className="vault-official">
-            <span className="vault-number">{official.number}</span>
-            <span><small>Official</small><strong>{official.name}</strong></span>
-            <span className="vault-meta">{official.difficulty} · {official.duration}</span>
-            <span aria-hidden="true">→</span>
-          </Link>
+export default function CampChallengePage() {
+  const [challenge, setChallenge] = useState<ChallengeDefinition | null>(null);
 
-          <div className="vault-list" aria-label="Practice challenges">
-            {practice.map((challenge) => (
-              <Link key={challenge.slug} href={`/challenge/${challenge.slug}`} className="vault-row">
-                <span className="vault-number">{challenge.number}</span>
-                <strong>{challenge.name}</strong>
-                <span className="vault-meta">{challenge.category} · {challenge.duration}</span>
-                <span aria-hidden="true">↗</span>
-              </Link>
-            ))}
-          </div>
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const override = params.get('c');
+    if (override) {
+      const forced = getChallenge(override);
+      if (forced) {
+        setChallenge(forced);
+        return;
+      }
+    }
+
+    try {
+      const stored = window.sessionStorage.getItem(PICK_KEY);
+      const existing = stored ? getChallenge(stored) : undefined;
+      if (existing) {
+        setChallenge(existing);
+        return;
+      }
+    } catch {
+      // sessionStorage unavailable — fall through to a fresh pick
+    }
+
+    const picked = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
+    try {
+      window.sessionStorage.setItem(PICK_KEY, picked.slug);
+    } catch {
+      // ignore persistence failures
+    }
+    setChallenge(picked);
+  }, []);
+
+  if (!challenge) {
+    return (
+      <div className="minimal-page game-page page-enter">
+        <div className="minimal-scene" aria-hidden="true" />
+        <div className="runner-shell">
+          <p style={{ textAlign: 'center', opacity: 0.7 }}>Drawing tonight&apos;s challenge…</p>
         </div>
-      </section>
-    </div>
-  );
+      </div>
+    );
+  }
+
+  return <ChallengeRunner challenge={challenge} forceOfficial />;
 }

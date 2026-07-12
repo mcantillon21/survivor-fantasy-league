@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   SYMBOLS,
   caesarEncode,
@@ -81,16 +81,16 @@ function ChoiceEngine({
 }
 
 const TRIVIA_QUESTIONS: ChoiceQuestion[] = [
-  { prompt: 'Who became the first Sole Survivor in the U.S. series?', options: ['Kelly Wiglesworth', 'Richard Hatch', 'Rudy Boesch', 'Colby Donaldson'], answer: 1 },
-  { prompt: 'The first U.S. season was filmed on an island off which location?', options: ['Borneo', 'Samoa', 'Fiji', 'Palau'], answer: 0 },
-  { prompt: 'Which season first introduced the Hidden Immunity Idol?', options: ['The Amazon', 'Pearl Islands', 'Guatemala', 'Panama'], answer: 2 },
-  { prompt: 'Which season was the first to feature a Final Three at the last Tribal Council?', options: ['Panama', 'Cook Islands', 'Fiji', 'China'], answer: 1 },
-  { prompt: 'Who was the first person to win Survivor twice?', options: ['Parvati Shallow', 'Boston Rob Mariano', 'Sandra Diaz-Twine', 'Tony Vlachos'], answer: 2 },
-  { prompt: 'In Cagayan, the starting tribes were divided by which three attributes?', options: ['Heroes, Healers, Hustlers', 'Fans, Favorites, Family', 'Brawn, Brains, Beauty', 'White Collar, Blue Collar, No Collar'], answer: 2 },
-  { prompt: 'Who gave his individual immunity necklace to Natalie Bolton and was then voted out?', options: ['Ozzy Lusth', 'James Clement', 'Jason Siska', 'Erik Reichenbach'], answer: 3 },
-  { prompt: 'Which season brought together a cast made entirely of previous winners?', options: ['All-Stars', 'Game Changers', 'Winners at War', 'Cambodia'], answer: 2 },
-  { prompt: 'Which season carried a pirate theme and introduced the Pearl Islands?', options: ['Marquesas', 'Pearl Islands', 'Vanuatu', 'Palau'], answer: 1 },
-  { prompt: 'What phrase completes the show motto: “Outwit. Outplay. ___.”?', options: ['Outlast', 'Outsmart', 'Outlive', 'Outvote'], answer: 0 },
+  { prompt: 'Which season was the first to end with a Final Three at the last Tribal Council?', options: ['Panama', 'Cook Islands', 'Fiji', 'Micronesia'], answer: 1 },
+  { prompt: 'Who was the first castaway to win the title of Sole Survivor twice?', options: ['Parvati Shallow', 'Sandra Diaz-Twine', 'Amber Mariano', 'Tony Vlachos'], answer: 1 },
+  { prompt: 'The Hidden Immunity Idol was introduced in which season?', options: ['Palau', 'Guatemala', 'Panama', 'Vanuatu'], answer: 1 },
+  { prompt: 'Exile Island first appeared in which season?', options: ['Panama', 'Palau', 'Cook Islands', 'Fiji'], answer: 0 },
+  { prompt: 'Which season was the FIRST to split tribes by Brains, Brawn, and Beauty?', options: ['Kaôh Rōng', 'Cagayan', 'Worlds Apart', 'San Juan del Sur'], answer: 1 },
+  { prompt: 'What season number was Winners at War?', options: ['38', '39', '40', '41'], answer: 2 },
+  { prompt: 'Who won Winners at War?', options: ['Sarah Lacina', 'Tony Vlachos', 'Michele Fitzgerald', 'Ben Driebergen'], answer: 1 },
+  { prompt: 'Who won Survivor: Redemption Island?', options: ['Russell Hantz', 'Rob Mariano', 'Phillip Sheppard', 'Grant Mattos'], answer: 1 },
+  { prompt: 'How many days does a classic pre-Season-41 full season last?', options: ['36', '39', '42', '26'], answer: 1 },
+  { prompt: 'Parvati Shallow won which season?', options: ['Cook Islands', 'Micronesia', 'Heroes vs. Villains', 'Caramoan'], answer: 1 },
 ];
 
 const TRIBAL_PULSE_QUESTIONS: ChoiceQuestion[] = [
@@ -185,6 +185,17 @@ function ChainReaction(props: EngineProps) {
     { label: 'Link three', prompt: 'Add the number of players in a final three.', answer: '67' },
     { label: 'Link four', prompt: 'Convert 67 to a letter using repeated A–Z cycles.', detail: '1=A, 26=Z, 27=A…', answer: 'O' },
     { label: 'Final link', prompt: 'Complete the phrase: Outwit. Outplay. _____.', answer: 'Outlast' },
+  ];
+  return <TextStageEngine {...props} stages={stages} />;
+}
+
+function RiddleTrials(props: EngineProps) {
+  const stages: TextStage[] = [
+    { label: 'Trial one', prompt: 'The more of me you take, the more you leave behind. What am I?', answer: 'footsteps' },
+    { label: 'Trial two', prompt: 'Jeff raises it high, then snuffs it to end your game. One word — what is it?', answer: 'torch' },
+    { label: 'Trial three', prompt: 'Six castaways each shake hands once with every other castaway. How many handshakes happen in total?', answer: '15' },
+    { label: 'Trial four', prompt: 'If 6 players build 6 shelters in 6 hours, how many hours do 12 players need to build 12 shelters?', answer: '6' },
+    { label: 'Final trial', prompt: 'The more it dries, the wetter it becomes. What is it?', answer: 'towel' },
   ];
   return <TextStageEngine {...props} stages={stages} />;
 }
@@ -400,7 +411,7 @@ interface OathState { round: number; hits: number; falseTaps: number; phase: 'wa
 
 function OathOfAttention({ seed, persistenceKey, onComplete }: EngineProps) {
   const [state, setState] = useStoredGameState<OathState>(persistenceKey, { round: 0, hits: 0, falseTaps: 0, phase: 'wait' });
-  const delay = useMemo(() => 1200 + Math.floor(createRng(`${seed}:${state.round}`)() * 1600), [seed, state.round]);
+  const delay = useMemo(() => 600 + Math.floor(createRng(`${seed}:${state.round}`)() * 900), [seed, state.round]);
 
   const advance = useCallback((hit: boolean) => {
     const hits = state.hits + (hit ? 1 : 0);
@@ -418,7 +429,7 @@ function OathOfAttention({ seed, persistenceKey, onComplete }: EngineProps) {
       return () => window.clearTimeout(timer);
     }
     if (state.phase === 'live') {
-      const timer = window.setTimeout(() => advance(false), 1400);
+      const timer = window.setTimeout(() => advance(false), 600);
       return () => window.clearTimeout(timer);
     }
   }, [advance, delay, setState, state.phase]);
@@ -440,19 +451,26 @@ function OathOfAttention({ seed, persistenceKey, onComplete }: EngineProps) {
 }
 
 const COMMAND_SEQUENCE = ['torch', 'compass', 'compass', 'rope'];
+// Decoys are NOT labelled "decoy" — they are near-lookalikes of the real items
+// (lantern≈torch, sundial≈compass, cord≈rope) to tempt a hasty tap.
 const COMMAND_ITEMS = [
   { id: 'torch', label: 'Torch', symbol: '✦' },
+  { id: 'lantern', label: 'Lantern', symbol: '✧' },
   { id: 'compass', label: 'Compass', symbol: '⌖' },
-  { id: 'skull', label: 'Skull decoy', symbol: '☠' },
+  { id: 'sundial', label: 'Sundial', symbol: '⊗' },
   { id: 'rope', label: 'Rope', symbol: '∞' },
-  { id: 'bell', label: 'Bell decoy', symbol: '◉' },
+  { id: 'cord', label: 'Cord', symbol: '≈' },
 ];
+const COMMAND_BRIEFING = 'Tap the Torch once, the Compass twice, then the Rope. Trust nothing that only looks similar — a Lantern is not a Torch, a Sundial is not a Compass, a Cord is not a Rope.';
+
+interface CommandState { phase: 'briefing' | 'command'; index: number; mistakes: number; }
 
 function CommandFromCamp({ persistenceKey, onComplete }: EngineProps) {
-  const [state, setState] = useStoredGameState(persistenceKey, { index: 0, mistakes: 0 });
+  const [state, setState] = useStoredGameState<CommandState>(persistenceKey, { phase: 'briefing', index: 0, mistakes: 0 });
+
   const act = (id: string) => {
     if (id !== COMMAND_SEQUENCE[state.index]) {
-      setState({ index: 0, mistakes: state.mistakes + 1 });
+      setState({ ...state, index: 0, mistakes: state.mistakes + 1 });
       return;
     }
     if (state.index === COMMAND_SEQUENCE.length - 1) {
@@ -462,12 +480,124 @@ function CommandFromCamp({ persistenceKey, onComplete }: EngineProps) {
     setState({ ...state, index: state.index + 1 });
   };
 
+  // Briefing phase: show ONLY the instruction (no items on screen to tap yet).
+  if (state.phase === 'briefing') {
+    return (
+      <section className="engine-board engine-board--command" aria-labelledby="command-title">
+        <div className="engine-progress"><span>Command briefing</span><span>Memorize the order</span></div>
+        <h2 id="command-title">Read your orders from camp.</h2>
+        <div className="cipher-strip" aria-label="Command briefing">{COMMAND_BRIEFING}</div>
+        <button type="button" className="button button--primary" onClick={() => setState({ ...state, phase: 'command' })}>
+          Hide orders &amp; begin
+        </button>
+      </section>
+    );
+  }
+
+  // Command phase: instruction is hidden; only the items (images) are shown.
   return (
     <section className="engine-board engine-board--command" aria-labelledby="command-title">
-      <div className="engine-progress"><span>Command sequence</span><span>{state.index} / {COMMAND_SEQUENCE.length} correct</span></div>
-      <h2 id="command-title">Tap the torch once, the compass twice, ignore every decoy, then finish with the rope.</h2>
+      <div className="engine-progress"><span>Execute from memory</span><span>{state.index} / {COMMAND_SEQUENCE.length} correct</span></div>
+      <h2 id="command-title">Carry out the command.</h2>
       <div className="command-items">{COMMAND_ITEMS.map((item) => <button key={item.id} type="button" onClick={() => act(item.id)}><span aria-hidden="true">{item.symbol}</span><strong>{item.label}</strong></button>)}</div>
       <p className="engine-penalty">Sequence resets: {state.mistakes}</p>
+    </section>
+  );
+}
+
+function VaultLock({ seed, onComplete }: EngineProps) {
+  const TARGET_PINS = 10;
+  const ZONE = 15; // degrees of tolerance on either side of the notch
+  const rng = useMemo(() => createRng(`vault:${seed}`), [seed]);
+  const angleRef = useRef(0);
+  const dirRef = useRef(1);
+  const speedRef = useRef(150); // degrees per second
+  const [angle, setAngle] = useState(0);
+  const [target, setTarget] = useState(() => 40 + rng() * 280);
+  const [opened, setOpened] = useState(0);
+  const [status, setStatus] = useState<'playing' | 'won' | 'lost'>('playing');
+
+  const arc = (a: number, b: number) => {
+    const raw = Math.abs(a - b) % 360;
+    return Math.min(raw, 360 - raw);
+  };
+
+  useEffect(() => {
+    if (status !== 'playing') return;
+    let raf = 0;
+    let last = 0;
+    const loop = (now: number) => {
+      if (!last) last = now;
+      const dt = (now - last) / 1000;
+      last = now;
+      angleRef.current = (angleRef.current + dirRef.current * speedRef.current * dt + 360) % 360;
+      setAngle(angleRef.current);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [status]);
+
+  const pop = useCallback(() => {
+    if (status !== 'playing') return;
+    if (arc(angleRef.current, target) <= ZONE) {
+      const nextOpened = opened + 1;
+      setOpened(nextOpened);
+      if (nextOpened >= TARGET_PINS) {
+        setStatus('won');
+        onComplete({ rawScore: 1000, summary: `All ${TARGET_PINS} pins popped — the vault is open.` });
+        return;
+      }
+      // Speed up, sometimes reverse, and drop the next notch away from the dial.
+      speedRef.current = Math.min(430, speedRef.current + 24);
+      if (rng() < 0.5) dirRef.current *= -1;
+      let next = rng() * 360;
+      while (arc(next, angleRef.current) < 70) next = rng() * 360;
+      setTarget(next);
+    } else {
+      setStatus('lost');
+      onComplete({ rawScore: Math.round((opened / TARGET_PINS) * 1000), summary: `${opened} of ${TARGET_PINS} pins popped before a miss.` });
+    }
+  }, [onComplete, opened, rng, status, target]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code === 'Space' || event.key === ' ') {
+        event.preventDefault();
+        pop();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pop]);
+
+  const C = 130;
+  const R = 104;
+  const point = (deg: number, radius = R): [number, number] => [
+    C + radius * Math.cos(((deg - 90) * Math.PI) / 180),
+    C + radius * Math.sin(((deg - 90) * Math.PI) / 180),
+  ];
+  const [px, py] = point(angle);
+  const [tx, ty] = point(target);
+  const live = status === 'playing' && arc(angle, target) <= ZONE;
+
+  return (
+    <section className="engine-board engine-board--vault" aria-labelledby="vault-title">
+      <div className="engine-progress"><span>Pins popped</span><span>{opened} / {TARGET_PINS}</span></div>
+      <h2 id="vault-title">Stop the dial on the glowing notch.</h2>
+      <svg viewBox="0 0 260 260" width="100%" style={{ maxWidth: 260, margin: '0 auto', display: 'block' }} role="img" aria-label={`Vault dial, ${opened} of ${TARGET_PINS} pins popped`}>
+        <circle cx={C} cy={C} r={R} fill="none" stroke="#3f3f46" strokeWidth={12} />
+        <circle cx={tx} cy={ty} r={13} fill={live ? '#f97316' : '#facc15'} stroke="#000" strokeWidth={2} />
+        <line x1={C} y1={C} x2={px} y2={py} stroke="#ffffff" strokeWidth={4} strokeLinecap="round" />
+        <circle cx={px} cy={py} r={9} fill="#ffffff" />
+        <circle cx={C} cy={C} r={20} fill="#18181b" stroke="#3f3f46" strokeWidth={3} />
+      </svg>
+      <div className="engine-actions">
+        <button type="button" className="button button--primary" onClick={pop} disabled={status !== 'playing'}>
+          Pop the lock
+        </button>
+      </div>
+      <p className="engine-penalty">Tap the button or press Space when the dial reaches the notch. One miss ends the run.</p>
     </section>
   );
 }
@@ -487,6 +617,8 @@ export function GameEngine({ slug, ...props }: EngineProps & { slug: string }) {
     case 'oath-of-attention': return <OathOfAttention {...props} />;
     case 'survivor-gauntlet': return <SurvivorGauntlet {...props} />;
     case 'command-from-camp': return <CommandFromCamp {...props} />;
+    case 'vault-lock': return <VaultLock {...props} />;
+    case 'riddle-trials': return <RiddleTrials {...props} />;
     default: return null;
   }
 }
