@@ -15,32 +15,43 @@ Create a bot at [discord.com/developers](https://discord.com/developers/applicat
 
 ### 2. Supabase Database
 
-Create tables:
+The current schema is managed by `supabase/migrations`. Its core ownership model is:
 
 ```sql
--- Players table
+create table games (
+  id uuid primary key default gen_random_uuid(),
+  code text unique not null,
+  name text not null,
+  discord_guild_id text,
+  status text not null default 'setup',
+  official_challenge_slug text not null default 'fire-signal-cipher'
+);
+
 create table players (
   id uuid primary key default gen_random_uuid(),
-  discord_id text unique not null,
+  game_id uuid not null references games(id) on delete cascade,
+  discord_id text not null,
   username text not null,
+  avatar_url text,
   tribe text,
   is_eliminated boolean default false,
   has_immunity boolean default false,
-  created_at timestamp default now()
+  created_at timestamp default now(),
+  unique (game_id, discord_id)
 );
 
--- Votes table
 create table votes (
   id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games(id) on delete cascade,
   voter_id text not null,
   target_id text not null,
-  tribal_council_id int not null,
+  tribal_council_id text not null,
   created_at timestamp default now()
 );
 
--- Challenges table
 create table challenges (
   id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games(id) on delete cascade,
   challenge_type text not null,
   player_id text not null,
   score int not null,
@@ -56,6 +67,7 @@ Copy `.env.example` to `.env` and fill in:
 - `ANTHROPIC_API_KEY` — from Anthropic Console
 - `SUPABASE_URL` — from Supabase project settings
 - `SUPABASE_ANON_KEY` — from Supabase API settings
+- `WEB_APP_URL` — public web URL used in season links
 
 ### 4. Install & Run
 
@@ -73,18 +85,22 @@ npm run dev
 - `/standings` — See who's still in
 
 **Host:**
+- `/newgame code name` — Create a season for this Discord server
+- `/startgame` — Start the season and reveal Challenge
+- `/endgame` — Close the season and preserve final standings
 - `/results` — Show challenge scores and grant immunity (top 3)
 - `/tribal` — Reveal votes and eliminate player
 
 ## How to Play
 
-1. Host creates Discord server and invites players
-2. Players use `/register` to join
-3. Host posts `/challenge` → players compete on web
-4. Host runs `/results` → Claude narrates winner, grants immunity
-5. Players use `/vote @player` for Tribal Council
-6. Host runs `/tribal` → Claude dramatically reveals elimination
-7. Repeat until final 3
+1. Host creates a server-specific season with `/newgame`
+2. Players open its link or enter its game code on the web
+3. Players use `/register` to join
+4. Host runs `/startgame`, then posts `/challenge`
+5. Host runs `/results` → Claude narrates winner, grants immunity
+6. Players use `/vote @player` for Tribal Council
+7. Host runs `/tribal` → Claude dramatically reveals elimination
+8. Repeat until final 3
 
 ## Architecture
 

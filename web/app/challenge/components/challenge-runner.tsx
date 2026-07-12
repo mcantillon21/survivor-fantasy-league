@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import type { ChallengeDefinition } from '@/lib/challenges/catalog';
-import { isOfficialChallenge } from '@/lib/challenges/catalog';
 import { normalizeScore } from '@/lib/challenges/logic';
+import type { Game } from '@/lib/games';
 import { getSupabaseClient } from '@/lib/supabase';
 import { GameEngine } from './game-engine';
 import type { EngineResult } from './engine-types';
@@ -18,8 +18,7 @@ interface StoredAttempt {
   score?: number;
 }
 
-export function ChallengeRunner({ challenge, forceOfficial = false }: { challenge: ChallengeDefinition; forceOfficial?: boolean }) {
-  const official = forceOfficial || isOfficialChallenge(challenge.slug);
+export function ChallengeRunner({ challenge, game, official }: { challenge: ChallengeDefinition; game: Game; official: boolean }) {
   const [phase, setPhase] = useState<RunnerPhase>('briefing');
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
@@ -49,7 +48,7 @@ export function ChallengeRunner({ challenge, forceOfficial = false }: { challeng
     }
 
     const playerSeed = official ? player.toLowerCase() : `practice-${Date.now()}`;
-    const attemptKey = `sfl:attempt:${challenge.slug}:${playerSeed}`;
+    const attemptKey = `sfl:attempt:${game.code}:${challenge.slug}:${playerSeed}`;
     const progressKey = `${attemptKey}:progress`;
     let attempt: StoredAttempt | null = null;
 
@@ -95,7 +94,7 @@ export function ChallengeRunner({ challenge, forceOfficial = false }: { challeng
 
     if (!official) return;
 
-    const attemptKey = `sfl:attempt:${challenge.slug}:${username.trim().toLowerCase()}`;
+    const attemptKey = `sfl:attempt:${game.code}:${challenge.slug}:${username.trim().toLowerCase()}`;
     window.localStorage.setItem(attemptKey, JSON.stringify({ startedAt, completed: true, score: finalScore }));
     setSaveStatus('saving');
     const supabase = getSupabaseClient();
@@ -106,6 +105,7 @@ export function ChallengeRunner({ challenge, forceOfficial = false }: { challeng
 
     try {
       const { error: saveError } = await supabase.from('challenges').insert({
+        game_id: game.id,
         challenge_type: challenge.slug,
         player_id: username.trim(),
         score: finalScore,
@@ -120,7 +120,7 @@ export function ChallengeRunner({ challenge, forceOfficial = false }: { challeng
       console.error('Failed to save official challenge score:', saveError);
       setSaveStatus('error');
     }
-  }, [challenge.slug, challenge.speedWeight, official, persistenceKey, startedAt, username]);
+  }, [challenge.slug, challenge.speedWeight, game.code, game.id, official, persistenceKey, startedAt, username]);
 
   const restartPractice = () => {
     window.localStorage.removeItem(persistenceKey);
@@ -141,7 +141,7 @@ export function ChallengeRunner({ challenge, forceOfficial = false }: { challeng
         <div className="runner-shell">
           <header className="runner-heading">
             <div>
-              <Link href="/challenge" className="back-link">← Challenges</Link>
+              <Link href={`/game/${game.code}/challenge`} className="back-link">← Challenges</Link>
               <h1>{challenge.name}</h1>
             </div>
             <div className="run-clock" role="timer" aria-label={`${elapsedSeconds} seconds elapsed`}>
@@ -183,7 +183,7 @@ export function ChallengeRunner({ challenge, forceOfficial = false }: { challeng
               </p>
             )}
             <div className="result-actions">
-              <Link href="/challenge" className="button button--primary">Challenges</Link>
+              <Link href={`/game/${game.code}/challenge`} className="button button--primary">Challenges</Link>
               {!official && <button type="button" className="button button--ghost" onClick={restartPractice}>Again</button>}
             </div>
           </div>
@@ -198,7 +198,7 @@ export function ChallengeRunner({ challenge, forceOfficial = false }: { challeng
       <section className="runner-shell runner-shell--entry">
         <header className="runner-heading runner-heading--entry">
           <div>
-            <Link href="/challenge" className="back-link">← Challenges</Link>
+            <Link href={`/game/${game.code}/challenge`} className="back-link">← Challenges</Link>
             <p>{official ? 'Official' : 'Practice'} · {challenge.duration}</p>
             <h1>{challenge.name}</h1>
           </div>

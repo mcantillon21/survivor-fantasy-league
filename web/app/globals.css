@@ -941,6 +941,34 @@ body {
   filter: saturate(0.72) contrast(1.05);
 }
 
+.home-page .minimal-scene {
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at center, oklch(8% 0.01 45) 0%, oklch(8% 0.01 45 / 0.93) 38%, oklch(8% 0.01 45 / 0.48) 100%),
+    var(--night-950);
+  filter: none;
+}
+
+.home-page .minimal-scene::before,
+.home-page .minimal-scene::after {
+  position: absolute;
+  inset: 0;
+  background: url('/images/challenge-vault-fire.webp') 70% center / cover no-repeat;
+  content: '';
+  filter: saturate(0.88) contrast(1.06) brightness(0.78);
+  mask-image: linear-gradient(to left, #000 0%, #000 24%, transparent 56%);
+  opacity: 0.5;
+}
+
+.home-page .minimal-scene::before {
+  clip-path: inset(0 0 0 50%);
+}
+
+.home-page .minimal-scene::after {
+  clip-path: inset(0 0 0 50%);
+  transform: scaleX(-1);
+}
+
 .minimal-shell,
 .runner-shell {
   width: min(100%, 56rem);
@@ -1006,6 +1034,50 @@ body {
 }
 
 .central-pane > p { margin: 0 0 2rem; color: var(--bone-200); }
+.hero-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.65rem, 2vw, 1.15rem);
+  margin-bottom: 1rem;
+  color: var(--bone-400);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.hero-logo__mark {
+  display: block;
+  width: clamp(5.5rem, 8vw, 7.25rem);
+  aspect-ratio: 16 / 9;
+  background: url('/images/survivor-logo.png') center / contain no-repeat;
+}
+.hero-logo__branch {
+  width: clamp(2.2rem, 4vw, 3rem);
+  height: clamp(2.2rem, 4vw, 3rem);
+  flex: 0 0 auto;
+  fill: currentColor;
+  opacity: 0.72;
+  transform: rotate(-68deg);
+}
+.hero-logo__branch--mirrored { transform: scaleX(-1) rotate(-68deg); }
+.central-pane--entry h2,
+.state-pane h2 { margin: 0 0 0.45rem; }
+.central-pane--entry { padding: clamp(1.35rem, 4vw, 2rem); }
+.game-code-form { display: grid; gap: 0.55rem; margin-top: 1.5rem; }
+.game-code-form label { color: var(--bone-200); font-size: 0.72rem; font-weight: 700; }
+.game-code-form > div { display: grid; grid-template-columns: 1fr auto; gap: 0.65rem; }
+.game-code-form input {
+  min-width: 0;
+  border: 1px solid oklch(88% 0.025 70 / 0.16);
+  border-radius: 0.7rem;
+  background: oklch(8% 0.012 48 / 0.5);
+  color: var(--bone-50);
+  padding: 0.75rem 0.9rem;
+}
+.game-code-form input::placeholder { color: var(--bone-400); }
+.game-code-form input[aria-invalid='true'] { border-color: var(--danger); }
+.state-pane > p { margin: 0; color: var(--bone-200); }
+.state-pane__actions { display: flex; gap: 0.65rem; margin-top: 1.5rem; }
 .pane-status { display: flex; justify-content: space-between; gap: 1rem; color: var(--bone-400); font-size: 0.7rem; }
 .pane-status span:first-child { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--bone-200); }
 .pane-status i { width: 0.42rem; height: 0.42rem; border-radius: 50%; background: var(--ember-400); box-shadow: 0 0 0.7rem var(--ember-400); }
@@ -1115,6 +1187,25 @@ body {
 .cast-board { border-top: 0; }
 .cast-board--eliminated { border-top: 1px solid oklch(88% 0.025 70 / 0.1); padding-top: 0.5rem; }
 .cast-player { min-height: 4.25rem; }
+.cast-player {
+  grid-template-columns: 3rem 2.75rem minmax(0, 1fr) auto;
+}
+.cast-player__avatar {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px oklch(96% 0.02 70 / 0.12), 0 0.45rem 1rem oklch(2% 0.01 45 / 0.24);
+}
+.cast-player__avatar--fallback {
+  display: grid;
+  place-items: center;
+  background: oklch(28% 0.055 47 / 0.72);
+  color: var(--ember-300);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
 .standings-state h2 { margin-top: 0; font-size: 2rem; }
 
 @media (max-width: 640px) {
@@ -1133,4 +1224,182 @@ body {
   .answer-grid { gap: 0.5rem; }
   .answer-option { min-height: 4.25rem; padding: 0.8rem; }
   .result-actions { flex-direction: row; }
+  .game-code-form > div { grid-template-columns: 1fr; }
+  .state-pane__actions { align-items: stretch; flex-direction: column; }
+  .cast-player { grid-template-columns: 2rem 2.5rem minmax(0, 1fr); }
+  .cast-player__avatar { width: 2.5rem; height: 2.5rem; }
+  .cast-player__status,
+  .cast-player > .status-badge { grid-column: 3; }
+}
+
+/* Restrained cinematic interaction system */
+.page-enter {
+  animation-duration: 420ms;
+}
+
+.button,
+.vault-official,
+.vault-row,
+.minimal-links a,
+.back-link,
+.answer-option,
+.symbol-palette button,
+.maze-controls button,
+.supply-grid button,
+.command-items button {
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.button {
+  transition-property: transform, background-color, border-color, color, box-shadow;
+  transition-duration: 140ms, 180ms, 180ms, 180ms, 180ms;
+}
+
+.vault-official,
+.vault-row {
+  position: relative;
+  transition-property: background-color, box-shadow;
+  transition-duration: 180ms;
+}
+
+.vault-official::before,
+.vault-row::before {
+  position: absolute;
+  top: 0.85rem;
+  bottom: 0.85rem;
+  left: 0;
+  width: 2px;
+  border-radius: 99px;
+  transform: scaleY(0.35);
+  background: var(--ember-400);
+  box-shadow: 0 0 0.8rem oklch(64% 0.2 43 / 0.24);
+  content: '';
+  opacity: 0;
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), opacity 140ms ease-out;
+}
+
+.vault-official > span:last-child,
+.vault-row > span:last-child,
+.button > span:last-child {
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), color 180ms ease-out;
+}
+
+.answer-option {
+  transition-property: transform, border-color, background-color, color, box-shadow;
+  transition-duration: 120ms, 180ms, 180ms, 180ms, 180ms;
+}
+
+.answer-option__arrow {
+  opacity: 0.42;
+  transform: none;
+  transition: transform 180ms cubic-bezier(0.2, 0, 0, 1), opacity 140ms ease-out, color 180ms ease-out;
+}
+
+.symbol-palette button,
+.maze-controls button,
+.supply-grid button,
+.command-items button {
+  transition-property: transform, border-color, background-color, color, box-shadow;
+  transition-duration: 120ms, 180ms, 180ms, 180ms, 180ms;
+}
+
+.button:hover,
+.answer-option:hover:not(:disabled),
+.symbol-palette button:hover {
+  transform: none;
+}
+
+.vault-official:hover { background: oklch(40% 0.12 43 / 0.2); }
+.vault-row:hover { background: transparent; }
+
+.cast-player:hover {
+  background: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .button:hover {
+    transform: none;
+  }
+
+  .button--primary:hover {
+    background: oklch(68% 0.21 47);
+    color: var(--bone-50);
+    box-shadow: inset 0 1px 0 oklch(96% 0.03 70 / 0.18), 0 0.55rem 1.5rem oklch(40% 0.17 40 / 0.2);
+  }
+
+  .button--ghost:hover {
+    border-color: oklch(78% 0.08 60 / 0.42);
+    background: oklch(24% 0.035 50 / 0.38);
+    box-shadow: inset 0 1px 0 oklch(96% 0.03 70 / 0.08);
+  }
+
+  .button:hover > span:last-child,
+  .vault-official:hover > span:last-child,
+  .vault-row:hover > span:last-child {
+    transform: translateX(3px);
+    color: var(--ember-300);
+  }
+
+  .vault-official:hover,
+  .vault-row:hover {
+    background: oklch(34% 0.07 47 / 0.12);
+    box-shadow: inset 0 1px 0 oklch(92% 0.03 70 / 0.035), inset 0 -1px 0 oklch(2% 0.01 45 / 0.1);
+  }
+
+  .vault-official:hover::before,
+  .vault-row:hover::before {
+    transform: scaleY(1);
+    opacity: 0.88;
+  }
+
+  .minimal-links a:hover,
+  .back-link:hover {
+    color: var(--ember-300);
+  }
+
+  .answer-option:hover:not(:disabled) {
+    transform: none;
+    border-color: oklch(72% 0.14 53 / 0.62);
+    background: oklch(30% 0.055 48 / 0.34);
+    color: var(--bone-50);
+    box-shadow: inset 0 0 0 1px oklch(72% 0.14 53 / 0.08);
+  }
+
+  .answer-option:hover:not(:disabled) .answer-option__arrow {
+    transform: translateX(3px);
+    color: var(--ember-300);
+    opacity: 1;
+  }
+
+  .symbol-palette button:hover,
+  .maze-controls button:hover,
+  .command-items button:hover {
+    transform: none;
+    border-color: oklch(72% 0.14 53 / 0.58);
+    background: oklch(30% 0.055 48 / 0.32);
+    color: var(--bone-50);
+    box-shadow: inset 0 0 0 1px oklch(72% 0.14 53 / 0.07);
+  }
+
+  .supply-grid button:hover:not([aria-pressed='true']) {
+    border-color: oklch(72% 0.14 53 / 0.52);
+    background: oklch(27% 0.045 48 / 0.28);
+    box-shadow: inset 0 0 0 1px oklch(72% 0.14 53 / 0.06);
+  }
+
+  .site-brand:hover .site-brand__mark {
+    box-shadow: inset 0 0 0 1px oklch(72% 0.14 53 / 0.18);
+  }
+}
+
+.button:active,
+.symbol-palette button:active,
+.maze-controls button:active,
+.command-items button:active {
+  transform: scale(0.96);
+}
+
+.answer-option:active,
+.supply-grid button:active {
+  transform: scale(0.985);
 }

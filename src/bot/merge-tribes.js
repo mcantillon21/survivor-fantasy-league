@@ -1,9 +1,19 @@
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
+import { getCurrentGame, supabase, userCanManageGame } from './games.js';
 
 export async function handleMerge(interaction) {
   const guild = interaction.guild;
 
   try {
+    if (!userCanManageGame(interaction)) {
+      await interaction.reply({ content: 'Only a server manager can merge tribes.', ephemeral: true });
+      return;
+    }
+    const game = await getCurrentGame(interaction.guildId);
+    if (!game || game.status !== 'live') {
+      await interaction.reply({ content: 'No live season exists for this server.', ephemeral: true });
+      return;
+    }
     await interaction.deferReply();
 
     const tribeRedRole = guild.roles.cache.find(r => r.name === 'Tribe Red');
@@ -66,6 +76,12 @@ export async function handleMerge(interaction) {
         '**The individual game begins.**'
       );
     }
+
+    const { error: stateError } = await supabase
+      .from('game_state')
+      .update({ phase: 'merged', updated_at: new Date().toISOString() })
+      .eq('game_id', game.id);
+    if (stateError) throw stateError;
 
     await interaction.editReply(
       '🔥 **THE TRIBES HAVE MERGED!**\n\n' +

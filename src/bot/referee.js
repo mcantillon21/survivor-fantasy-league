@@ -13,10 +13,12 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
-export async function getChallengeResults() {
+export async function getChallengeResults(gameId, challengeSlug) {
   const { data: challenges } = await supabase
     .from('challenges')
     .select('*')
+    .eq('game_id', gameId)
+    .eq('challenge_type', challengeSlug)
     .order('completed_at', { ascending: false })
     .limit(20);
 
@@ -58,25 +60,27 @@ Write a dramatic 2-3 sentence narration announcing the winner(s) and who's vulne
   return message.content[0].text;
 }
 
-export async function grantImmunity(playerIds) {
+export async function grantImmunity(gameId, playerNames) {
   // Clear all immunity first
-  await supabase.from('players').update({ has_immunity: false }).neq('id', '00000000-0000-0000-0000-000000000000');
+  await supabase.from('players').update({ has_immunity: false }).eq('game_id', gameId);
 
   // Grant to winners
   const { error } = await supabase
     .from('players')
     .update({ has_immunity: true })
-    .in('discord_id', playerIds);
+    .eq('game_id', gameId)
+    .in('username', playerNames);
 
   if (error) {
     console.error('Failed to grant immunity:', error);
   }
 }
 
-export async function tallyVotes(tribalCouncilId) {
+export async function tallyVotes(gameId, tribalCouncilId) {
   const { data: votes } = await supabase
     .from('votes')
     .select('*')
+    .eq('game_id', gameId)
     .eq('tribal_council_id', tribalCouncilId);
 
   if (!votes || votes.length === 0) {
@@ -96,10 +100,11 @@ export async function tallyVotes(tribalCouncilId) {
   };
 }
 
-export async function eliminatePlayer(discordId) {
+export async function eliminatePlayer(gameId, discordId) {
   const { error } = await supabase
     .from('players')
     .update({ is_eliminated: true, has_immunity: false })
+    .eq('game_id', gameId)
     .eq('discord_id', discordId);
 
   if (error) {
@@ -107,8 +112,8 @@ export async function eliminatePlayer(discordId) {
   }
 }
 
-export async function narrateTribalCouncil(votes) {
-  const { data: players } = await supabase.from('players').select('*');
+export async function narrateTribalCouncil(gameId, votes) {
+  const { data: players } = await supabase.from('players').select('*').eq('game_id', gameId);
 
   const playerMap = new Map(players.map((p) => [p.discord_id, p.username]));
 

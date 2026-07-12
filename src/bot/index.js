@@ -7,7 +7,9 @@ import {
   handleVote,
   handleTribal,
   handleStandings,
-  handleNewSeason,
+  handleNewGame,
+  handleStartGame,
+  handleEndGame,
 } from './commands.js';
 import { handleMerge } from './merge-tribes.js';
 import { triggerBotChat } from './bot-ai.js';
@@ -62,8 +64,20 @@ const commands = [
     description: 'Merge the tribes (host only)',
   },
   {
-    name: 'newseason',
-    description: 'Reset the game for a new season (host only)',
+    name: 'newgame',
+    description: 'Create a season for this server (host only)',
+    options: [
+      { name: 'code', type: 3, description: 'Short web code, such as island-50', required: true },
+      { name: 'name', type: 3, description: 'Season name', required: true },
+    ],
+  },
+  {
+    name: 'startgame',
+    description: 'Start this server’s season (host only)',
+  },
+  {
+    name: 'endgame',
+    description: 'End this server’s season (host only)',
   },
 ];
 
@@ -110,8 +124,12 @@ client.on('interactionCreate', async (interaction) => {
       await handleStandings(interaction);
     } else if (commandName === 'merge') {
       await handleMerge(interaction);
-    } else if (commandName === 'newseason') {
-      await handleNewSeason(interaction);
+    } else if (commandName === 'newgame') {
+      await handleNewGame(interaction);
+    } else if (commandName === 'startgame') {
+      await handleStartGame(interaction);
+    } else if (commandName === 'endgame') {
+      await handleEndGame(interaction);
     }
   } catch (error) {
     console.error(`Error handling ${commandName}:`, error);
