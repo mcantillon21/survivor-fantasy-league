@@ -191,11 +191,11 @@ function ChainReaction(props: EngineProps) {
 
 function RiddleTrials(props: EngineProps) {
   const stages: TextStage[] = [
-    { label: 'Trial one', prompt: 'The more of me you take, the more you leave behind. What am I?', answer: 'footsteps' },
-    { label: 'Trial two', prompt: 'Jeff raises it high, then snuffs it to end your game. One word — what is it?', answer: 'torch' },
-    { label: 'Trial three', prompt: 'Six castaways each shake hands once with every other castaway. How many handshakes happen in total?', answer: '15' },
-    { label: 'Trial four', prompt: 'If 6 players build 6 shelters in 6 hours, how many hours do 12 players need to build 12 shelters?', answer: '6' },
-    { label: 'Final trial', prompt: 'The more it dries, the wetter it becomes. What is it?', answer: 'towel' },
+    { label: 'Trial one', prompt: 'The more you take away from me, the bigger I become. What am I?', answer: 'hole' },
+    { label: 'Trial two', prompt: 'Forward I am heavy, but backward I am not. What am I?', answer: 'ton' },
+    { label: 'Trial three', prompt: 'I am not alive, yet I grow; I have no lungs, yet I need air; I have no mouth, yet water kills me. What am I?', answer: 'fire' },
+    { label: 'Trial four', prompt: 'What English word is always spelled incorrectly?', answer: 'incorrectly' },
+    { label: 'Final trial', prompt: 'A man shows a photo and says: “Brothers and sisters I have none, but this man’s father is my father’s son.” Who is in the photo? (one word)', answer: 'son' },
   ];
   return <TextStageEngine {...props} stages={stages} />;
 }
