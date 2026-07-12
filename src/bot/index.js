@@ -80,8 +80,8 @@ async function registerCommands() {
 client.once('ready', () => {
   console.log(`✓ Bot online as ${client.user.tag}`);
   registerCommands();
-  startBotLife(client);
-  console.log('✓ Bot life simulation started');
+  // startBotLife(client);
+  // console.log('✓ Bot life simulation started');
 });
 
 client.on('interactionCreate', async (interaction) => {
