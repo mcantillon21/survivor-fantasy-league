@@ -185,6 +185,18 @@ export const CHALLENGES: ChallengeDefinition[] = [
     speedWeight: 0,
     rules: ['Tap Pop (or press Space) when the dial reaches the notch.', 'Each pin makes the dial faster.', 'One miss ends the run.'],
   },
+  {
+    slug: 'riddle-trials',
+    name: 'Riddle Trials',
+    number: '15',
+    tagline: 'Outwit the island one riddle at a time.',
+    description: 'Solve a gauntlet of riddles and logic puzzles, entering each answer to advance to the next trial.',
+    category: 'Puzzle',
+    difficulty: 'Hard',
+    duration: '3–6 min',
+    speedWeight: 1,
+    rules: ['Answer each riddle to unlock the next.', 'One or two words, or a number.', 'Wrong attempts cost points.'],
+  },
 ];
 
 export function getChallenge(slug: string) {

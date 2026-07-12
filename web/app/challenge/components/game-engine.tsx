@@ -189,6 +189,17 @@ function ChainReaction(props: EngineProps) {
   return <TextStageEngine {...props} stages={stages} />;
 }
 
+function RiddleTrials(props: EngineProps) {
+  const stages: TextStage[] = [
+    { label: 'Trial one', prompt: 'The more of me you take, the more you leave behind. What am I?', answer: 'footsteps' },
+    { label: 'Trial two', prompt: 'Jeff raises it high, then snuffs it to end your game. One word — what is it?', answer: 'torch' },
+    { label: 'Trial three', prompt: 'Six castaways each shake hands once with every other castaway. How many handshakes happen in total?', answer: '15' },
+    { label: 'Trial four', prompt: 'If 6 players build 6 shelters in 6 hours, how many hours do 12 players need to build 12 shelters?', answer: '6' },
+    { label: 'Final trial', prompt: 'The more it dries, the wetter it becomes. What is it?', answer: 'towel' },
+  ];
+  return <TextStageEngine {...props} stages={stages} />;
+}
+
 function SurvivorGauntlet(props: EngineProps) {
   const stages: TextStage[] = [
     { label: 'Cipher gate', prompt: 'Shift KHOOR backward by three.', answer: 'HELLO' },
@@ -607,6 +618,7 @@ export function GameEngine({ slug, ...props }: EngineProps & { slug: string }) {
     case 'survivor-gauntlet': return <SurvivorGauntlet {...props} />;
     case 'command-from-camp': return <CommandFromCamp {...props} />;
     case 'vault-lock': return <VaultLock {...props} />;
+    case 'riddle-trials': return <RiddleTrials {...props} />;
     default: return null;
   }
 }
