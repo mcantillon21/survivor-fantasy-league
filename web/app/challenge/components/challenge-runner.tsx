@@ -10,7 +10,7 @@ import { GameEngine } from './game-engine';
 import type { EngineResult } from './engine-types';
 
 type RunnerPhase = 'briefing' | 'playing' | 'complete';
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'unavailable' | 'error';
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'duplicate' | 'unavailable' | 'error';
 
 interface StoredAttempt {
   startedAt: number;
@@ -18,7 +18,7 @@ interface StoredAttempt {
   score?: number;
 }
 
-export function ChallengeRunner({ challenge, game, official }: { challenge: ChallengeDefinition; game: Game; official: boolean }) {
+export function ChallengeRunner({ challenge, game, official, round = 0 }: { challenge: ChallengeDefinition; game: Game; official: boolean; round?: number }) {
   const [phase, setPhase] = useState<RunnerPhase>('briefing');
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
@@ -30,6 +30,7 @@ export function ChallengeRunner({ challenge, game, official }: { challenge: Chal
   const [summary, setSummary] = useState('');
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [lockedScore, setLockedScore] = useState<number | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
     if (phase !== 'playing' || !startedAt) return;
@@ -39,16 +40,44 @@ export function ChallengeRunner({ challenge, game, official }: { challenge: Chal
     return () => window.clearInterval(interval);
   }, [phase, startedAt]);
 
-  const startChallenge = (event: FormEvent<HTMLFormElement>) => {
+  const startChallenge = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const player = username.trim();
+    let player = username.trim();
     if (official && !player) {
       setError('Enter your registered Discord username for the official challenge.');
       return;
     }
 
+    if (official) {
+      setIsStarting(true);
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        setError('Official play is temporarily unavailable. Try again shortly.');
+        setIsStarting(false);
+        return;
+      }
+      const { data: players, error: lookupError } = await supabase
+        .from('players')
+        .select('username')
+        .eq('game_id', game.id)
+        .eq('is_eliminated', false);
+      if (lookupError) {
+        setError('Could not verify your registration. Try again.');
+        setIsStarting(false);
+        return;
+      }
+      const registered = players?.find((entry) => entry.username.toLowerCase() === player.toLowerCase());
+      if (!registered) {
+        setError('That Discord name is not an active player in this game.');
+        setIsStarting(false);
+        return;
+      }
+      player = registered.username;
+      setUsername(player);
+    }
+
     const playerSeed = official ? player.toLowerCase() : `practice-${Date.now()}`;
-    const attemptKey = `sfl:attempt:${game.code}:${challenge.slug}:${playerSeed}`;
+    const attemptKey = `sfl:attempt:${game.code}:${round}:${challenge.slug}:${playerSeed}`;
     const progressKey = `${attemptKey}:progress`;
     let attempt: StoredAttempt | null = null;
 
@@ -63,6 +92,7 @@ export function ChallengeRunner({ challenge, game, official }: { challenge: Chal
       if (attempt?.completed) {
         setLockedScore(attempt.score ?? 0);
         setError('This browser has already submitted an official attempt for that player.');
+        setIsStarting(false);
         return;
       }
     } else {
@@ -81,6 +111,7 @@ export function ChallengeRunner({ challenge, game, official }: { challenge: Chal
     setPersistenceKey(progressKey);
     setSeed(`${challenge.slug}:${playerSeed}`);
     setPhase('playing');
+    setIsStarting(false);
   };
 
   const finishChallenge = useCallback(async (result: EngineResult) => {
@@ -94,8 +125,7 @@ export function ChallengeRunner({ challenge, game, official }: { challenge: Chal
 
     if (!official) return;
 
-    const attemptKey = `sfl:attempt:${game.code}:${challenge.slug}:${username.trim().toLowerCase()}`;
-    window.localStorage.setItem(attemptKey, JSON.stringify({ startedAt, completed: true, score: finalScore }));
+    const attemptKey = `sfl:attempt:${game.code}:${round}:${challenge.slug}:${username.trim().toLowerCase()}`;
     setSaveStatus('saving');
     const supabase = getSupabaseClient();
     if (!supabase) {
@@ -104,38 +134,29 @@ export function ChallengeRunner({ challenge, game, official }: { challenge: Chal
     }
 
     try {
-      // Tag with the player's tribe and the current round so the referee can
-      // score per round and, in the tribe phase, sum by tribe.
-      let tribe: string | null = null;
-      let round = 1;
-      try {
-        const { data: gs } = await supabase.from('game_state').select('current_round').eq('game_id', game.id).maybeSingle();
-        if (gs?.current_round) round = gs.current_round;
-        const { data: playerRow } = await supabase.from('players').select('tribe').eq('game_id', game.id).eq('username', username.trim()).maybeSingle();
-        if (playerRow?.tribe) tribe = playerRow.tribe;
-      } catch (lookupError) {
-        console.error('Failed to look up tribe/round:', lookupError);
-      }
-
-      const { error: saveError } = await supabase.from('challenges').insert({
-        game_id: game.id,
-        challenge_type: challenge.slug,
-        player_id: username.trim(),
-        tribe,
-        round,
-        score: finalScore,
+      const { error: saveError } = await supabase.rpc('submit_challenge_attempt', {
+        p_game_id: game.id,
+        p_challenge_type: challenge.slug,
+        p_username: username.trim(),
+        p_score: finalScore,
       });
       if (saveError) {
         console.error('Failed to save official challenge score:', saveError.message);
-        setSaveStatus('error');
+        if (saveError.message.includes('ATTEMPT_ALREADY_SUBMITTED')) {
+          window.localStorage.setItem(attemptKey, JSON.stringify({ startedAt, completed: true, score: finalScore }));
+          setSaveStatus('duplicate');
+        } else {
+          setSaveStatus('error');
+        }
       } else {
+        window.localStorage.setItem(attemptKey, JSON.stringify({ startedAt, completed: true, score: finalScore }));
         setSaveStatus('saved');
       }
     } catch (saveError) {
       console.error('Failed to save official challenge score:', saveError);
       setSaveStatus('error');
     }
-  }, [challenge.slug, challenge.speedWeight, game.code, game.id, official, persistenceKey, startedAt, username]);
+  }, [challenge.slug, challenge.speedWeight, game.code, game.id, official, persistenceKey, round, startedAt, username]);
 
   const restartPractice = () => {
     window.localStorage.removeItem(persistenceKey);
@@ -193,6 +214,7 @@ export function ChallengeRunner({ challenge, game, official }: { challenge: Chal
               <p className={`save-status save-status--${saveStatus}`} aria-live="polite">
                 {saveStatus === 'saving' && 'Saving…'}
                 {saveStatus === 'saved' && 'Score saved.'}
+                {saveStatus === 'duplicate' && 'Official attempt already submitted.'}
                 {saveStatus === 'unavailable' && 'Save unavailable. Screenshot this.'}
                 {saveStatus === 'error' && 'Save failed. Screenshot this.'}
               </p>
@@ -243,8 +265,8 @@ export function ChallengeRunner({ challenge, game, official }: { challenge: Chal
             </div>
           )}
           {error && <p id="challenge-entry-error" className="field-error" role="alert">{error}{lockedScore !== null ? ` Previous score: ${lockedScore}.` : ''}</p>}
-          <button type="submit" className="button button--primary button--full">
-            {official ? 'Begin' : 'Practice'} <span aria-hidden="true">→</span>
+          <button type="submit" className="button button--primary button--full" disabled={isStarting}>
+            {isStarting ? 'Checking…' : official ? 'Begin' : 'Practice'} {!isStarting && <span aria-hidden="true">→</span>}
           </button>
         </form>
       </section>

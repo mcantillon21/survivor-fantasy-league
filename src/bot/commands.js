@@ -4,16 +4,12 @@ import {
   resolveImmunity, narrateChallengeResults, tallyElimination, eliminatePlayer,
   narrateTribalCouncil, tallyJury, crownWinner, narrateWinner,
 } from './referee.js';
+import { CHALLENGE_CHOICES, getChallengeName } from './challenges.js';
 
 const CHALLENGE_BASE = 'https://survivor-fantasy-league-pi.vercel.app/game';
 
 // One challenge is drawn per round; mirror of web/lib/challenges/catalog.ts.
-const CHALLENGE_SLUGS = [
-  'fire-signal-cipher', 'strategy-trivia', 'idol-lockbox', 'torchlight-labyrinth',
-  'memory-totem', 'island-coordinates', 'chain-reaction', 'supply-drop',
-  'risk-the-flame', 'tribal-pulse', 'oath-of-attention', 'survivor-gauntlet',
-  'command-from-camp', 'vault-lock', 'riddle-trials',
-];
+const CHALLENGE_SLUGS = CHALLENGE_CHOICES.map((challenge) => challenge.value);
 
 // Live Discord server names.
 const CH = { announcements: 'announcements', camp: 'camp', lobby: 'challenge-lobby', tribal: 'tribal-council', red: 'tribe-red', blue: 'tribe-blue', spectators: 'spectators', ponderosa: 'ponderosa' };
@@ -47,6 +43,48 @@ async function revokeTribeChannels(guild, discordId) {
     const ch = findChannel(guild, name);
     if (ch) await ch.permissionOverwrites.delete(discordId).catch(() => {});
   }
+}
+async function archiveTribeRooms(guild, players) {
+  if (!guild) return { ok: false, missing: [CH.red, CH.blue, CH.camp] };
+  const red = findChannel(guild, CH.red);
+  const blue = findChannel(guild, CH.blue);
+  const camp = findChannel(guild, CH.camp);
+  const missing = [[CH.red, red], [CH.blue, blue], [CH.camp, camp]]
+    .filter(([, channel]) => !channel)
+    .map(([name]) => name);
+  if (missing.length) return { ok: false, missing };
+
+  for (const player of alivePlayers(players)) {
+    const tribeChannel = player.tribe === 'red' ? red : player.tribe === 'blue' ? blue : null;
+    if (!tribeChannel) continue;
+    await tribeChannel.permissionOverwrites
+      .edit(player.discord_id, { SendMessages: false })
+      .catch((error) => console.error(`archive #${tribeChannel.name}:`, error.message));
+  }
+  return { ok: true, missing: [] };
+}
+async function syncDiscordProfiles(guild, players) {
+  if (!guild) return players;
+  const synced = [];
+  for (const player of players) {
+    if (!/^\d{17,20}$/.test(player.discord_id)) {
+      synced.push(player);
+      continue;
+    }
+    try {
+      const member = await guild.members.fetch(player.discord_id);
+      const username = member.user.username;
+      const avatarUrl = member.displayAvatarURL({ extension: 'png', size: 128 });
+      if (player.username !== username || player.avatar_url !== avatarUrl) {
+        await supabase.from('players').update({ username, avatar_url: avatarUrl }).eq('id', player.id);
+      }
+      synced.push({ ...player, username, avatar_url: avatarUrl });
+    } catch (error) {
+      console.error(`sync Discord profile ${player.discord_id}:`, error.message);
+      synced.push(player);
+    }
+  }
+  return synced;
 }
 // Eliminated: strip Player + tribe access; grant boot/spectator (pre-merge) or jury (post-merge).
 async function moveOut(guild, discordId, postMerge) {
@@ -102,6 +140,8 @@ export async function handleRegister(interaction) {
 
   const { error } = await supabase.from('players').insert({
     game_id: game.id, discord_id: interaction.user.id, username: interaction.user.username,
+    avatar_url: interaction.member?.displayAvatarURL?.({ extension: 'png', size: 128 })
+      || interaction.user.displayAvatarURL({ extension: 'png', size: 128 }),
     tribe: null, is_eliminated: false, has_immunity: false, is_juror: false,
   });
   if (error) throw error;
@@ -134,29 +174,45 @@ export async function handleStart(interaction) {
     const emoji = tribe === 'red' ? '🔴' : tribe === 'blue' ? '🔵' : '•';
     msg += `${emoji} **Tribe ${tribe} (${members.length})**\n${members.map((m) => `• ${m}`).join('\n')}\n\n`;
   }
-  msg += 'Each tribe only sees its own channel. First immunity challenge is up — merge at 12.';
+  msg += `Each tribe only sees its own channel. The host will post the first immunity challenge — merge at ${result.mergeAt}.`;
   await post(guild, CH.announcements, msg);
   await interaction.editReply(msg);
 }
 
 // ---------------------------------------------------------------------------
-// /challenge — (host) draw ONE random challenge for everyone this round
+// /challenge — (host) select ONE challenge for everyone this round
 // ---------------------------------------------------------------------------
 export async function handleChallenge(interaction) {
   if (!(await hostOnly(interaction))) return;
   const game = await requireGame(interaction, { live: true });
   if (!game) return;
 
-  const slug = CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
-  await updateGameState(game.id, { active_challenge: slug });
   const state = await getGameState(game.id);
+  if (state.active_challenge) {
+    const { count } = await supabase
+      .from('challenges')
+      .select('id', { count: 'exact', head: true })
+      .eq('game_id', game.id)
+      .eq('round', state.current_round);
+    if (count > 0) {
+      await interaction.reply({
+        content: `${getChallengeName(state.active_challenge)} is already official for this round and attempts have started. Finish the round before posting another.`,
+        ephemeral: true,
+      });
+      return;
+    }
+  }
+
+  const selected = interaction.options.getString('game');
+  const slug = selected || CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
+  await updateGameState(game.id, { active_challenge: slug });
   const teamLine = state.phase === 'tribe'
     ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
     : 'Every player for themselves. Only the top scorer is safe.';
 
   await post(interaction.guild, CH.lobby,
-    `🔥 **IMMUNITY CHALLENGE**\n\n${teamLine}\n\nEveryone plays the same challenge — enter here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\nYou have 10 minutes.`);
-  await interaction.reply({ content: `Challenge posted to #${CH.lobby} (same challenge for everyone).`, ephemeral: true });
+    `🔥 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\nYou have 10 minutes.`);
+  await interaction.reply({ content: `${getChallengeName(slug)} posted to #${CH.lobby}.`, ephemeral: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -205,85 +261,110 @@ export async function handleVote(interaction) {
     if (!voter || !voter.is_juror) { await interaction.reply({ content: 'Only jury members vote at the finale.', ephemeral: true }); return; }
     const pool = state.finalist_pool || [];
     if (!targetData || !pool.includes(target.id)) { await interaction.reply({ content: 'You can only vote for one of the three finalists.', ephemeral: true }); return; }
-    await supabase.from('votes').delete().eq('game_id', game.id).eq('voter_id', interaction.user.id).eq('round', state.current_round).eq('vote_type', 'jury');
-    await supabase.from('votes').insert({ game_id: game.id, voter_id: interaction.user.id, target_id: target.id, round: state.current_round, vote_type: 'jury' });
+    const { error: clearError } = await supabase.from('votes').delete().eq('game_id', game.id).eq('voter_id', interaction.user.id).eq('round', state.current_round).eq('vote_type', 'jury');
+    if (clearError) throw clearError;
+    const { error: voteError } = await supabase.from('votes').insert({ game_id: game.id, voter_id: interaction.user.id, target_id: target.id, round: state.current_round, vote_type: 'jury' });
+    if (voteError) throw voteError;
     await interaction.reply({ content: `🔒 Your jury vote for ${target.username} to WIN is locked in.`, ephemeral: true });
     return;
   }
 
   if (!voter || voter.is_eliminated) { await interaction.reply({ content: 'You are not in the game or already eliminated.', ephemeral: true }); return; }
+  const { count: immuneCount } = await supabase
+    .from('players')
+    .select('id', { count: 'exact', head: true })
+    .eq('game_id', game.id)
+    .eq('is_eliminated', false)
+    .eq('has_immunity', true);
+  if (!immuneCount) { await interaction.reply({ content: 'Voting is not open yet. Wait for the host to post `/results`.', ephemeral: true }); return; }
   if (state.phase === 'tribe' && voter.has_immunity) { await interaction.reply({ content: 'Your tribe won immunity — you are safe and do not vote this round.', ephemeral: true }); return; }
   if (target.id === interaction.user.id) { await interaction.reply({ content: 'You cannot vote for yourself.', ephemeral: true }); return; }
   if (!targetData || targetData.is_eliminated) { await interaction.reply({ content: 'That player is not in the game.', ephemeral: true }); return; }
   if (targetData.has_immunity) { await interaction.reply({ content: `${target.username} has immunity and cannot be voted out.`, ephemeral: true }); return; }
   if (state.phase === 'tribe' && targetData.tribe !== voter.tribe) { await interaction.reply({ content: 'You can only vote for someone on your own tribe.', ephemeral: true }); return; }
 
-  // Exactly one vote per player per round.
-  const { data: prior } = await supabase.from('votes').select('id')
-    .eq('game_id', game.id).eq('voter_id', interaction.user.id).eq('round', state.current_round).eq('vote_type', 'elimination').maybeSingle();
-  if (prior) { await interaction.reply({ content: 'You have already voted this round — you only get one vote.', ephemeral: true }); return; }
+  const { error: clearError } = await supabase.from('votes').delete().eq('game_id', game.id).eq('voter_id', interaction.user.id).eq('round', state.current_round).eq('vote_type', 'elimination');
+  if (clearError) throw clearError;
+  const { error: voteError } = await supabase.from('votes').insert({ game_id: game.id, voter_id: interaction.user.id, target_id: target.id, round: state.current_round, vote_type: 'elimination' });
+  if (voteError) throw voteError;
+  await interaction.reply({ content: `🔒 Your vote for ${target.username} is locked in.`, ephemeral: true });
 
-  await supabase.from('votes').insert({ game_id: game.id, voter_id: interaction.user.id, target_id: target.id, round: state.current_round, vote_type: 'elimination' });
-  await interaction.reply({ content: `🔒 Your vote for ${target.username} is locked in and stays secret until the tally.`, ephemeral: true });
-
-  // Auto-reveal the Tribal Council once every eligible voter has voted.
   try {
     const players = await getPlayers(game.id);
-    const alive = alivePlayers(players);
-    const eligible = state.phase === 'tribe' ? alive.filter((p) => !p.has_immunity) : alive;
+    const eligible = alivePlayers(players).filter((player) => state.phase !== 'tribe' || !player.has_immunity);
     const { data: cast } = await supabase.from('votes').select('voter_id')
       .eq('game_id', game.id).eq('round', state.current_round).eq('vote_type', 'elimination');
-    const voted = new Set((cast || []).map((v) => v.voter_id)).size;
+    const voted = new Set((cast || []).map((vote) => vote.voter_id)).size;
     if (eligible.length > 0 && voted >= eligible.length && !resolvingGames.has(game.id)) {
       resolvingGames.add(game.id);
       try {
-        await post(interaction.guild, CH.tribal, '🗳️ Everyone has voted — tallying the votes…');
+        await post(interaction.guild, CH.tribal, '🗳️ Everyone has voted. Reading the votes…');
         await resolveEliminationTribal(interaction.guild, game.id);
       } finally {
         resolvingGames.delete(game.id);
       }
     }
-  } catch (e) {
-    console.error('Auto-tribal failed:', e.message);
+  } catch (error) {
+    console.error('Auto-tribal failed:', error.message);
   }
 }
 
-// Shared elimination-tribal resolution — used by /tribal AND by the auto-tally
-// that fires once every eligible voter has voted. Single bot instance, so an
-// in-memory lock is enough to prevent a double-resolve.
+// ---------------------------------------------------------------------------
+// Tribal resolution shared by automatic reveal and the host backup command.
+// ---------------------------------------------------------------------------
 const resolvingGames = new Set();
 
 async function resolveEliminationTribal(guild, gameId) {
   const state = await getGameState(gameId);
   if (!state || !['tribe', 'individual'].includes(state.phase)) return { ok: false, reason: 'phase' };
-
   const players = await getPlayers(gameId);
   const playerMap = new Map(players.map((p) => [p.discord_id, p.username]));
+  if (!alivePlayers(players).some((player) => player.has_immunity)) {
+    return { ok: false, reason: 'results' };
+  }
   const result = await tallyElimination(gameId, state.current_round);
   if (!result) return { ok: false, reason: 'novotes' };
+  const eligibleVoters = alivePlayers(players).filter((player) => state.phase !== 'tribe' || !player.has_immunity);
+  const votesCast = result.votes.reduce((total, [, count]) => total + count, 0);
+  if (votesCast < eligibleVoters.length) {
+    return { ok: false, reason: 'waiting', votesCast, eligible: eligibleVoters.length };
+  }
+
+  if (result.tie) {
+    const names = result.tied.map((id) => playerMap.get(id) || 'Unknown').join(' and ');
+    let msg = `🔥 **TRIBAL COUNCIL — TIE**\n\nThe vote is tied between **${names}**. No one leaves tonight yet.\n\n**Tally:**\n`;
+    result.votes.forEach(([id, count]) => { msg += `• ${playerMap.get(id) || 'Unknown'}: ${count} vote${count > 1 ? 's' : ''}\n`; });
+    msg += '\nThe ballot is reset. Everyone eligible must use `/vote` again.';
+    await supabase.from('votes').delete().eq('game_id', gameId).eq('round', state.current_round).eq('vote_type', 'elimination');
+    await post(guild, CH.tribal, msg);
+    return { ok: false, reason: 'tie', msg };
+  }
 
   const aliveBefore = alivePlayers(players).length;
   const postMerge = state.phase === 'individual';
-  const narration = await narrateTribalCouncil(result.votes, playerMap, { tie: result.tie, tied: result.tied });
+  const narration = await narrateTribalCouncil(result.votes, playerMap);
 
   await eliminatePlayer(gameId, result.eliminated, { juror: postMerge, placement: aliveBefore });
   await moveOut(guild, result.eliminated, postMerge);
-  // Clear this round's elimination votes (cleanup + guards against a re-tally).
   await supabase.from('votes').delete().eq('game_id', gameId).eq('round', state.current_round).eq('vote_type', 'elimination');
+  await supabase.from('players').update({ has_immunity: false }).eq('game_id', gameId).eq('is_eliminated', false);
 
   const aliveAfter = aliveBefore - 1;
   let transition = '';
-  if (state.phase === 'tribe' && aliveAfter <= state.merge_at) {
+  if (aliveAfter <= 3) {
+    const finalists = alivePlayers(await getPlayers(gameId)).map((p) => p.discord_id);
+    await updateGameState(gameId, { phase: 'final', finalist_pool: finalists, current_round: state.current_round + 1, active_challenge: null });
+    transition = `\n\n🔥 **FINAL 3: ${finalists.map((id) => playerMap.get(id)).join(', ')}.** Host: run \`/finaltribal\`.`;
+  } else if (state.phase === 'tribe' && aliveAfter <= state.merge_at) {
+    const archive = await archiveTribeRooms(guild, players);
+    if (!archive.ok) console.error(`Merge could not archive channels: ${archive.missing.join(', ')}`);
     await mergeGameState(gameId);
-    await updateGameState(gameId, { current_round: state.current_round + 1 });
+    await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null });
     transition = `\n\n🏝️ **THE MERGE!** ${aliveAfter} players remain — individual game from here.`;
     await post(guild, CH.announcements, `🏝️ **THE MERGE!** ${aliveAfter} players remain. It is now every player for themselves.`);
-  } else if (aliveAfter <= 3) {
-    const finalists = alivePlayers(await getPlayers(gameId)).map((p) => p.discord_id);
-    await updateGameState(gameId, { phase: 'final', finalist_pool: finalists, current_round: state.current_round + 1 });
-    transition = `\n\n🔥 **FINAL 3: ${finalists.map((id) => playerMap.get(id)).join(', ')}.** Host: run \`/finaltribal\`.`;
+    await post(guild, CH.camp, `🏝️ **WELCOME TO THE MERGED CAMP.** ${aliveAfter} players remain. Tribe rooms are now read-only.`);
   } else {
-    await updateGameState(gameId, { current_round: state.current_round + 1 });
+    await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null });
   }
 
   const name = playerMap.get(result.eliminated) || 'Player';
@@ -295,22 +376,23 @@ async function resolveEliminationTribal(guild, gameId) {
 }
 
 // ---------------------------------------------------------------------------
-// /tribal — (host) manually reveal the vote (usually auto-fires; this is a backup)
+// /tribal — host backup; the bot normally resolves when all votes are in.
 // ---------------------------------------------------------------------------
 export async function handleTribal(interaction) {
   if (!(await hostOnly(interaction))) return;
   await interaction.deferReply();
   const game = await getCurrentGame(interaction.guildId);
   if (!game) { await interaction.editReply('No active season.'); return; }
-  const state = await getGameState(game.id);
-  if (state.phase === 'final') { await interaction.editReply('It is the final three — use `/finaltribal`.'); return; }
-  if (resolvingGames.has(game.id)) { await interaction.editReply('That tribal is already being resolved.'); return; }
+  if (resolvingGames.has(game.id)) { await interaction.editReply('That Tribal Council is already being resolved.'); return; }
 
   resolvingGames.add(game.id);
   try {
-    const r = await resolveEliminationTribal(interaction.guild, game.id);
-    if (!r.ok) { await interaction.editReply(r.reason === 'novotes' ? 'No votes have been cast yet.' : 'There is no Tribal Council to hold right now.'); return; }
-    await interaction.editReply(r.msg);
+    const result = await resolveEliminationTribal(interaction.guild, game.id);
+    if (result.msg) { await interaction.editReply(result.msg); return; }
+    if (result.reason === 'results') { await interaction.editReply('Tribal Council is not open yet. Run `/results` first.'); return; }
+    if (result.reason === 'waiting') { await interaction.editReply(`Waiting for votes: ${result.votesCast}/${result.eligible} eligible players have voted.`); return; }
+    if (result.reason === 'novotes') { await interaction.editReply('No votes have been cast yet.'); return; }
+    await interaction.editReply('There is no Tribal Council to hold right now.');
   } finally {
     resolvingGames.delete(game.id);
   }
@@ -337,6 +419,13 @@ export async function handleFinalTribal(interaction) {
     await post(interaction.guild, CH.tribal,
       `⚖️ **FINAL TRIBAL COUNCIL**\n\nThe jury may now speak. Jurors — \`/vote\` for who should WIN.\nFinalists: **${finalists.map((p) => p.username).join(', ')}** (finalists cannot vote).\n\nWhen every juror has voted, the host runs \`/finaltribal\` again to read the votes.`);
     await interaction.editReply('Final Tribal opened — jurors can vote now. Run `/finaltribal` again to read the votes.');
+    return;
+  }
+
+  const juryCount = players.filter((player) => player.is_juror).length;
+  const juryVotesCast = result.votes.reduce((total, [, count]) => total + count, 0);
+  if (juryVotesCast < juryCount) {
+    await interaction.editReply(`Waiting for jury votes: ${juryVotesCast}/${juryCount} jurors have voted.`);
     return;
   }
 
@@ -376,9 +465,17 @@ export async function handleMerge(interaction) {
   if (!game) { await interaction.editReply('No active season.'); return; }
   const state = await getGameState(game.id);
   if (state.phase !== 'tribe') { await interaction.editReply('The tribes are not in a state to merge right now.'); return; }
+  const players = await getPlayers(game.id);
+  const archive = await archiveTribeRooms(interaction.guild, players);
+  if (!archive.ok) {
+    await interaction.editReply(`Merge stopped: missing #${archive.missing.join(', #')}. No game state was changed.`);
+    return;
+  }
   await mergeGameState(game.id);
+  await updateGameState(game.id, { active_challenge: null });
   await post(interaction.guild, CH.announcements, '🏝️ **THE TRIBES HAVE MERGED!** Every player for themselves. Immunity is individual.');
-  await interaction.editReply('Merge complete — the game is now individual.');
+  await post(interaction.guild, CH.camp, '🏝️ **WELCOME TO THE MERGED CAMP.** Tribe rooms are now read-only. The game is individual.');
+  await interaction.editReply('Merge complete — tribe rooms are read-only and the game is now in #camp.');
 }
 
 // ---------------------------------------------------------------------------
@@ -410,7 +507,7 @@ export async function handleStandings(interaction) {
   const game = await getCurrentGame(interaction.guildId, { includeEnded: true });
   if (!game) { await interaction.reply({ content: 'No season exists for this server yet.', ephemeral: true }); return; }
   const state = await getGameState(game.id);
-  const players = await getPlayers(game.id);
+  const players = await syncDiscordProfiles(interaction.guild, await getPlayers(game.id));
   if (!players.length) { await interaction.reply('No players registered yet.'); return; }
 
   if (state?.phase === 'ended') {
@@ -438,15 +535,15 @@ export async function handleStandings(interaction) {
 }
 
 // ---------------------------------------------------------------------------
-// Scheduled auto-challenge — posts one random challenge to every live game's
-// #challenge-lobby twice a week (Sunday & Wednesday) at 7:30pm local time.
-// Override with CHALLENGE_HOUR / CHALLENGE_MINUTE / CHALLENGE_DAYS (0=Sun..6=Sat).
+// Scheduled challenge — Sunday and Wednesday at 7:30pm local time by default.
+// Override with CHALLENGE_DAYS (0=Sun..6=Sat), HOUR, and MINUTE.
 // ---------------------------------------------------------------------------
 export async function postScheduledChallenges(client) {
   const { data: games } = await supabase.from('games').select('*').eq('status', 'live');
   for (const game of games || []) {
     const state = await getGameState(game.id);
     if (!state || !['tribe', 'individual'].includes(state.phase)) continue; // skip final/ended/setup
+    if (state.active_challenge) continue; // never replace an official challenge mid-round
 
     const slug = CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
     await updateGameState(game.id, { active_challenge: slug });
@@ -457,27 +554,27 @@ export async function postScheduledChallenges(client) {
       ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
       : 'Every player for themselves. Only the top scorer is safe.';
     await post(guild, CH.lobby,
-      `🔥 **IMMUNITY CHALLENGE**\n\n${teamLine}\n\nEveryone plays the same challenge — enter here:\n${CHALLENGE_BASE}/${game.code}/challenge`);
+      `🌙 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge`);
   }
 }
 
 export function startChallengeScheduler(client) {
   const hour = Number(process.env.CHALLENGE_HOUR ?? 19);
   const minute = Number(process.env.CHALLENGE_MINUTE ?? 30);
-  // Days of week to post on: Sunday (0) and Wednesday (3) by default.
-  const days = (process.env.CHALLENGE_DAYS || '0,3').split(',').map((d) => Number(d.trim()));
+  const days = (process.env.CHALLENGE_DAYS || '0,3').split(',').map((day) => Number(day.trim()));
   const run = async () => {
     try { await postScheduledChallenges(client); } catch (e) { console.error('Scheduled challenge failed:', e.message); }
   };
   const scheduleNext = () => {
     const now = new Date();
     let next = null;
-    for (let add = 0; add <= 7 && !next; add++) {
-      const cand = new Date(now);
-      cand.setDate(now.getDate() + add);
-      cand.setHours(hour, minute, 0, 0);
-      if (days.includes(cand.getDay()) && cand > now) next = cand;
+    for (let offset = 0; offset <= 7 && !next; offset++) {
+      const candidate = new Date(now);
+      candidate.setDate(now.getDate() + offset);
+      candidate.setHours(hour, minute, 0, 0);
+      if (days.includes(candidate.getDay()) && candidate > now) next = candidate;
     }
+    if (!next) return;
     const ms = next.getTime() - now.getTime();
     console.log(`⏰ Next challenge drop: ${next.toLocaleString()}`);
     setTimeout(async () => { await run(); scheduleNext(); }, ms);

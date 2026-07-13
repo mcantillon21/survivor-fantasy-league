@@ -53,7 +53,7 @@ export async function requireGame(interaction, { live = false, includeEnded = fa
     return null;
   }
   if (live && game.status !== 'live') {
-    await interaction.reply({ content: 'This season has not started. A host can use `/startgame`.', ephemeral: true });
+    await interaction.reply({ content: 'This season has not started. A host can use `/start`.', ephemeral: true });
     return null;
   }
   return game;

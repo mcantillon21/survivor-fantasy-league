@@ -1,8 +1,25 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from './games.js';
+import { tallyVoteRows } from './game-rules.js';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const NARRATION_MODEL = 'claude-sonnet-4-20250514';
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || 'disabled' });
+const NARRATION_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
+
+async function narration(prompt, fallback, maxTokens = 220) {
+  if (process.env.ENABLE_AI_NARRATION === 'false' || !process.env.ANTHROPIC_API_KEY) return fallback;
+  try {
+    const message = await anthropic.messages.create({
+      model: NARRATION_MODEL,
+      max_tokens: maxTokens,
+      thinking: { type: 'disabled' },
+      messages: [{ role: 'user', content: prompt }],
+    });
+    return message.content.find((part) => part.type === 'text')?.text || fallback;
+  } catch (error) {
+    console.error('AI narration unavailable:', error.message);
+    return fallback;
+  }
+}
 
 export { supabase };
 
@@ -50,11 +67,12 @@ function shuffle(array) {
 export async function startGame(gameId) {
   const state = await getGameState(gameId);
   const players = await getPlayers(gameId);
-  if (players.length < 2) return { error: 'Need at least 2 registered players to start.' };
+  if (players.length < 6) return { error: 'Need at least 6 registered Discord players to start.' };
 
   const [tribeA, tribeB] = state?.tribe_names || ['red', 'blue'];
   const shuffled = shuffle(players);
   const half = Math.ceil(shuffled.length / 2);
+  const mergeAt = Math.min(state?.merge_at || 12, Math.max(5, Math.floor(players.length * 2 / 3)));
 
   for (let i = 0; i < shuffled.length; i++) {
     await supabase.from('players').update({
@@ -63,10 +81,11 @@ export async function startGame(gameId) {
     }).eq('id', shuffled[i].id);
   }
 
-  await updateGameState(gameId, { phase: 'tribe', current_round: 1, active_challenge: null, finalist_pool: null, winner_discord_id: null });
+  await updateGameState(gameId, { phase: 'tribe', current_round: 1, merge_at: mergeAt, active_challenge: null, finalist_pool: null, winner_discord_id: null });
 
   return {
     count: shuffled.length,
+    mergeAt,
     rosters: {
       [tribeA]: shuffled.slice(0, half).map((p) => p.username),
       [tribeB]: shuffled.slice(half).map((p) => p.username),
@@ -126,23 +145,17 @@ export async function narrateChallengeResults(summary) {
     ? 'Two tribes just competed in a team immunity challenge. The winning tribe is safe; the losing tribe goes to Tribal Council.'
     : 'Players competed in an individual immunity challenge. Only the winner is safe.';
   const prompt = `You are Jeff Probst hosting Survivor. ${context}\n\nScores:\n${board}\n\nWrite a dramatic 2-3 sentence narration announcing who won immunity and who is vulnerable. Theatrical but concise.`;
-  const message = await anthropic.messages.create({ model: NARRATION_MODEL, max_tokens: 200, messages: [{ role: 'user', content: prompt }] });
-  return message.content[0].text;
+  const winner = summary.phase === 'tribe' ? `Tribe ${summary.winningTribe}` : summary.winner;
+  return narration(prompt, `${winner} wins immunity. Everyone else is vulnerable tonight.`, 200);
 }
 
 // ---------------------------------------------------------------------------
-// Elimination votes (random-draw tie-break)
+// Elimination votes. A tie is returned to Discord for a revote; nobody is
+// removed by chance.
 // ---------------------------------------------------------------------------
 export async function tallyElimination(gameId, round) {
   const { data: votes } = await supabase.from('votes').select('*').eq('game_id', gameId).eq('round', round).eq('vote_type', 'elimination');
-  if (!votes || votes.length === 0) return null;
-  const tally = new Map();
-  votes.forEach((v) => tally.set(v.target_id, (tally.get(v.target_id) || 0) + 1));
-  const sorted = Array.from(tally.entries()).sort((a, b) => b[1] - a[1]);
-  const top = sorted[0][1];
-  const tied = sorted.filter(([, c]) => c === top).map(([id]) => id);
-  const eliminated = tied.length > 1 ? tied[Math.floor(Math.random() * tied.length)] : tied[0];
-  return { eliminated, votes: sorted, tie: tied.length > 1, tied };
+  return tallyVoteRows(votes);
 }
 
 export async function eliminatePlayer(gameId, discordId, { juror, placement }) {
@@ -155,11 +168,12 @@ export async function eliminatePlayer(gameId, discordId, { juror, placement }) {
 export async function narrateTribalCouncil(votes, playerMap, extra = {}) {
   const board = votes.map(([id, c]) => `${playerMap.get(id) || 'Unknown'}: ${c} vote${c > 1 ? 's' : ''}`).join('\n');
   const tieNote = extra.tie
-    ? ` The vote tied between ${extra.tied.map((id) => playerMap.get(id) || 'Unknown').join(' and ')}, broken by a random rock draw.`
+    ? ` The vote tied between ${extra.tied.map((id) => playerMap.get(id) || 'Unknown').join(' and ')}.`
     : '';
   const prompt = `You are Jeff Probst at Tribal Council. The votes are tallied:\n\n${board}${tieNote}\n\nWrite a dramatic 2-3 sentence reveal of who was voted out. Build suspense, then deliver. Theatrical but concise.`;
-  const message = await anthropic.messages.create({ model: NARRATION_MODEL, max_tokens: 220, messages: [{ role: 'user', content: prompt }] });
-  return message.content[0].text;
+  const eliminated = votes[0]?.[0];
+  const eliminatedName = playerMap.get(eliminated) || 'The player with the most votes';
+  return narration(prompt, `${eliminatedName}, the tribe has spoken.`, 220);
 }
 
 // ---------------------------------------------------------------------------
@@ -184,6 +198,5 @@ export async function crownWinner(gameId, discordId) {
 
 export async function narrateWinner(winnerName, voteBoard) {
   const prompt = `You are Jeff Probst reading the final jury votes. ${winnerName} has won Survivor.\n\nFinal tally:\n${voteBoard}\n\nWrite a dramatic 2-3 sentence announcement crowning ${winnerName} as the Sole Survivor. Theatrical but concise.`;
-  const message = await anthropic.messages.create({ model: NARRATION_MODEL, max_tokens: 220, messages: [{ role: 'user', content: prompt }] });
-  return message.content[0].text;
+  return narration(prompt, `${winnerName} has won the jury vote and is the Sole Survivor.`, 220);
 }

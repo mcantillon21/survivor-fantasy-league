@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { getGameByCode } from '@/lib/games';
+import { getSupabaseClient } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +22,18 @@ export default async function GameHomePage({ params }: { params: Promise<{ code:
 
   const live = game.status === 'live';
   const ended = game.status === 'ended';
+  let challengeOpen = false;
+  if (live) {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data } = await supabase
+        .from('game_state')
+        .select('active_challenge')
+        .eq('game_id', game.id)
+        .maybeSingle();
+      challengeOpen = Boolean(data?.active_challenge);
+    }
+  }
 
   return (
     <div className="minimal-page page-enter">
@@ -32,9 +45,9 @@ export default async function GameHomePage({ params }: { params: Promise<{ code:
         </header>
         <div className="central-pane glass-panel state-pane">
           <h2>{ended ? 'The votes are final.' : live ? 'The game is on.' : 'Waiting for the host.'}</h2>
-          <p>{ended ? 'Review the final cast.' : live ? 'Challenges and standings are open.' : 'The Challenge tab appears when the season starts.'}</p>
+          <p>{ended ? 'Review the final cast.' : challengeOpen ? 'Tonight’s challenge is open.' : live ? 'Waiting for the host’s next challenge.' : 'The Challenge tab appears when the season starts.'}</p>
           <div className="state-pane__actions">
-            {live && <Link className="button button--primary" href={`/game/${game.code}/challenge`}>Challenges <span aria-hidden="true">→</span></Link>}
+            {challengeOpen && <Link className="button button--primary" href={`/game/${game.code}/challenge`}>Challenge <span aria-hidden="true">→</span></Link>}
             <Link className="button button--ghost" href={`/game/${game.code}/standings`}>Standings</Link>
           </div>
         </div>

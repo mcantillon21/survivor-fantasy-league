@@ -6,6 +6,7 @@
   "scripts": {
     "bot": "node src/bot/index.js",
     "dev": "node --watch src/bot/index.js",
+    "test": "node --test src/bot/*.test.js",
     "web": "cd web && npm run dev"
   },
   "dependencies": {

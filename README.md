@@ -45,7 +45,8 @@ create table votes (
   game_id uuid not null references games(id) on delete cascade,
   voter_id text not null,
   target_id text not null,
-  tribal_council_id text not null,
+  round int not null default 1,
+  vote_type text not null default 'elimination',
   created_at timestamp default now()
 );
 
@@ -65,9 +66,11 @@ Copy `.env.example` to `.env` and fill in:
 - `DISCORD_TOKEN` — from Discord Developer Portal
 - `DISCORD_CLIENT_ID` — Application ID from Discord
 - `ANTHROPIC_API_KEY` — from Anthropic Console
+- `ANTHROPIC_MODEL` — defaults to the current Sonnet release (`claude-sonnet-5`)
 - `SUPABASE_URL` — from Supabase project settings
 - `SUPABASE_ANON_KEY` — from Supabase API settings
 - `WEB_APP_URL` — public web URL used in season links
+- `CHALLENGE_DAYS` / `HOUR` / `MINUTE` — scheduled drops (defaults: Sunday and Wednesday at 7:30pm)
 
 ### 4. Install & Run
 
@@ -80,27 +83,43 @@ npm run dev
 
 **Players:**
 - `/register` — Join the game
-- `/challenge` — Get link to current challenge
 - `/vote @player` — Vote someone out at Tribal Council
 - `/standings` — See who's still in
 
 **Host:**
 - `/newgame code name` — Create a season for this Discord server
-- `/startgame` — Start the season and reveal Challenge
+- `/start` — Shuffle the registered players into tribes and start the season
+- `/challenge game:<choice>` — Select and post one official challenge
 - `/endgame` — Close the season and preserve final standings
-- `/results` — Show challenge scores and grant immunity (top 3)
-- `/tribal` — Reveal votes and eliminate player
+- `/results` — Tally the current round and grant tribe or individual immunity
+- `/tribal` — Reveal the current round’s vote; ties pause for a revote
+- `/merge` — Archive tribe rooms and move the game into `#camp`
+- `/finaltribal` — Open the jury vote, then reveal and crown the winner
 
 ## How to Play
 
 1. Host creates a server-specific season with `/newgame`
 2. Players open its link or enter its game code on the web
 3. Players use `/register` to join
-4. Host runs `/startgame`, then posts `/challenge`
+4. Host runs `/start`, then posts `/challenge game:<choice>` in `#challenge-lobby`
 5. Host runs `/results` → Claude narrates winner, grants immunity
 6. Players use `/vote @player` for Tribal Council
-7. Host runs `/tribal` → Claude dramatically reveals elimination
-8. Repeat until final 3
+7. Host runs `/tribal` in `#tribal-council`; a tie requires a revote
+8. Repeat through the merge, then use `/finaltribal` at the final three
+
+## Discord Channel Contract
+
+The live server uses the following existing channels:
+
+- `#announcements` — registration and season announcements
+- `#standings` — `/results` and `/standings`
+- `#camp` — shared conversation; becomes the merged camp
+- `#challenge-lobby` — official challenge posts
+- `#tribal-council` — private `/vote` commands and host `/tribal` reveals
+- `#tribe-red` and `#tribe-blue` — private tribe rooms; made read-only by `/merge`
+- `#ponderosa` and `#spectators` — eliminated-player and spectator rooms
+
+The bot expects roles named `Player`, `Jury`, `Spectator`, and `Pre-merge boot`. The host needs Manage Server. The bot needs View Channels, Send Messages, Read Message History, Use Application Commands, Manage Roles, Manage Channels, and Manage Webhooks.
 
 ## Architecture
 

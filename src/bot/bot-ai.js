@@ -11,6 +11,7 @@ const __dirname = dirname(__filename);
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+const CHAT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 
 const profiles = JSON.parse(
   readFileSync(join(__dirname, 'bot-profiles.json'), 'utf8')
@@ -91,8 +92,9 @@ export async function getBotResponse(botId, channelContext, recentMessages) {
   ];
 
   const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model: CHAT_MODEL,
     max_tokens: 150,
+    thinking: { type: 'disabled' },
     system: buildSystemPrompt(profile),
     messages: messagesForApi,
   });

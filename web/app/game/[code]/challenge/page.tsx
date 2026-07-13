@@ -14,19 +14,22 @@ export default async function GameChallengePage({ params }: { params: Promise<{ 
   const game = await getGameByCode(code);
   if (!game || game.status !== 'live') redirect(`/game/${code}`);
 
-  let slug = game.official_challenge_slug;
+  let slug: string | null = null;
+  let round = 1;
   const supabase = getSupabaseClient();
   if (supabase) {
     const { data } = await supabase
       .from('game_state')
-      .select('active_challenge')
+      .select('active_challenge, current_round')
       .eq('game_id', game.id)
       .maybeSingle();
     if (data?.active_challenge) slug = data.active_challenge;
+    if (data?.current_round) round = data.current_round;
   }
 
+  if (!slug) redirect(`/game/${code}`);
   const challenge = getChallenge(slug);
   if (!challenge) redirect(`/game/${code}`);
 
-  return <ChallengeRunner challenge={challenge} game={game} official />;
+  return <ChallengeRunner challenge={challenge} game={game} official round={round} />;
 }

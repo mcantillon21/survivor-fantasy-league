@@ -16,6 +16,7 @@ import {
 } from './commands.js';
 import { triggerBotChat } from './bot-ai.js';
 import { startBotLife } from './bot-life.js';
+import { CHALLENGE_CHOICES } from './challenges.js';
 
 config();
 
@@ -35,7 +36,16 @@ const commands = [
   },
   {
     name: 'challenge',
-    description: 'Post the immunity challenge link',
+    description: 'Select and post this round’s immunity challenge',
+    options: [
+      {
+        name: 'game',
+        type: 3,
+        description: 'Challenge to make official (random if omitted)',
+        required: false,
+        choices: CHALLENGE_CHOICES,
+      },
+    ],
   },
   {
     name: 'results',
