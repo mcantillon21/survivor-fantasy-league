@@ -12,7 +12,7 @@ import {
   handleMerge,
   handleStandings,
   handleEndGame,
-  startNightlyScheduler,
+  startChallengeScheduler,
 } from './commands.js';
 import { triggerBotChat } from './bot-ai.js';
 import { startBotLife } from './bot-life.js';
@@ -106,7 +106,7 @@ async function registerCommands() {
 client.once('ready', () => {
   console.log(`✓ Bot online as ${client.user.tag}`);
   registerCommands();
-  startNightlyScheduler(client);
+  startChallengeScheduler(client);
   // startBotLife(client);
   // console.log('✓ Bot life simulation started');
 });
