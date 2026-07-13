@@ -218,13 +218,84 @@ export async function handleVote(interaction) {
   if (targetData.has_immunity) { await interaction.reply({ content: `${target.username} has immunity and cannot be voted out.`, ephemeral: true }); return; }
   if (state.phase === 'tribe' && targetData.tribe !== voter.tribe) { await interaction.reply({ content: 'You can only vote for someone on your own tribe.', ephemeral: true }); return; }
 
-  await supabase.from('votes').delete().eq('game_id', game.id).eq('voter_id', interaction.user.id).eq('round', state.current_round).eq('vote_type', 'elimination');
+  // Exactly one vote per player per round.
+  const { data: prior } = await supabase.from('votes').select('id')
+    .eq('game_id', game.id).eq('voter_id', interaction.user.id).eq('round', state.current_round).eq('vote_type', 'elimination').maybeSingle();
+  if (prior) { await interaction.reply({ content: 'You have already voted this round — you only get one vote.', ephemeral: true }); return; }
+
   await supabase.from('votes').insert({ game_id: game.id, voter_id: interaction.user.id, target_id: target.id, round: state.current_round, vote_type: 'elimination' });
-  await interaction.reply({ content: `🔒 Your vote for ${target.username} is locked in and stays secret until the host reveals the tally.`, ephemeral: true });
+  await interaction.reply({ content: `🔒 Your vote for ${target.username} is locked in and stays secret until the tally.`, ephemeral: true });
+
+  // Auto-reveal the Tribal Council once every eligible voter has voted.
+  try {
+    const players = await getPlayers(game.id);
+    const alive = alivePlayers(players);
+    const eligible = state.phase === 'tribe' ? alive.filter((p) => !p.has_immunity) : alive;
+    const { data: cast } = await supabase.from('votes').select('voter_id')
+      .eq('game_id', game.id).eq('round', state.current_round).eq('vote_type', 'elimination');
+    const voted = new Set((cast || []).map((v) => v.voter_id)).size;
+    if (eligible.length > 0 && voted >= eligible.length && !resolvingGames.has(game.id)) {
+      resolvingGames.add(game.id);
+      try {
+        await post(interaction.guild, CH.tribal, '🗳️ Everyone has voted — tallying the votes…');
+        await resolveEliminationTribal(interaction.guild, game.id);
+      } finally {
+        resolvingGames.delete(game.id);
+      }
+    }
+  } catch (e) {
+    console.error('Auto-tribal failed:', e.message);
+  }
+}
+
+// Shared elimination-tribal resolution — used by /tribal AND by the auto-tally
+// that fires once every eligible voter has voted. Single bot instance, so an
+// in-memory lock is enough to prevent a double-resolve.
+const resolvingGames = new Set();
+
+async function resolveEliminationTribal(guild, gameId) {
+  const state = await getGameState(gameId);
+  if (!state || !['tribe', 'individual'].includes(state.phase)) return { ok: false, reason: 'phase' };
+
+  const players = await getPlayers(gameId);
+  const playerMap = new Map(players.map((p) => [p.discord_id, p.username]));
+  const result = await tallyElimination(gameId, state.current_round);
+  if (!result) return { ok: false, reason: 'novotes' };
+
+  const aliveBefore = alivePlayers(players).length;
+  const postMerge = state.phase === 'individual';
+  const narration = await narrateTribalCouncil(result.votes, playerMap, { tie: result.tie, tied: result.tied });
+
+  await eliminatePlayer(gameId, result.eliminated, { juror: postMerge, placement: aliveBefore });
+  await moveOut(guild, result.eliminated, postMerge);
+  // Clear this round's elimination votes (cleanup + guards against a re-tally).
+  await supabase.from('votes').delete().eq('game_id', gameId).eq('round', state.current_round).eq('vote_type', 'elimination');
+
+  const aliveAfter = aliveBefore - 1;
+  let transition = '';
+  if (state.phase === 'tribe' && aliveAfter <= state.merge_at) {
+    await mergeGameState(gameId);
+    await updateGameState(gameId, { current_round: state.current_round + 1 });
+    transition = `\n\n🏝️ **THE MERGE!** ${aliveAfter} players remain — individual game from here.`;
+    await post(guild, CH.announcements, `🏝️ **THE MERGE!** ${aliveAfter} players remain. It is now every player for themselves.`);
+  } else if (aliveAfter <= 3) {
+    const finalists = alivePlayers(await getPlayers(gameId)).map((p) => p.discord_id);
+    await updateGameState(gameId, { phase: 'final', finalist_pool: finalists, current_round: state.current_round + 1 });
+    transition = `\n\n🔥 **FINAL 3: ${finalists.map((id) => playerMap.get(id)).join(', ')}.** Host: run \`/finaltribal\`.`;
+  } else {
+    await updateGameState(gameId, { current_round: state.current_round + 1 });
+  }
+
+  const name = playerMap.get(result.eliminated) || 'Player';
+  let msg = `🔥 **TRIBAL COUNCIL**\n\n${narration}\n\n**Final tally:**\n`;
+  result.votes.forEach(([id, c]) => { msg += `• ${playerMap.get(id) || 'Unknown'}: ${c} vote${c > 1 ? 's' : ''}${id === result.eliminated ? ' ❌' : ''}\n`; });
+  msg += `\n**${name}, the tribe has spoken. 🔦**${postMerge ? ' You are now on the **Jury**.' : ' You are now a **Pre-merge boot**.'}${transition}`;
+  await post(guild, CH.tribal, msg);
+  return { ok: true, msg };
 }
 
 // ---------------------------------------------------------------------------
-// /tribal — (host) reveal the vote and eliminate a player
+// /tribal — (host) manually reveal the vote (usually auto-fires; this is a backup)
 // ---------------------------------------------------------------------------
 export async function handleTribal(interaction) {
   if (!(await hostOnly(interaction))) return;
@@ -233,40 +304,16 @@ export async function handleTribal(interaction) {
   if (!game) { await interaction.editReply('No active season.'); return; }
   const state = await getGameState(game.id);
   if (state.phase === 'final') { await interaction.editReply('It is the final three — use `/finaltribal`.'); return; }
+  if (resolvingGames.has(game.id)) { await interaction.editReply('That tribal is already being resolved.'); return; }
 
-  const players = await getPlayers(game.id);
-  const playerMap = new Map(players.map((p) => [p.discord_id, p.username]));
-  const result = await tallyElimination(game.id, state.current_round);
-  if (!result) { await interaction.editReply('No votes have been cast yet.'); return; }
-
-  const aliveBefore = alivePlayers(players).length;
-  const postMerge = state.phase === 'individual';
-  const narration = await narrateTribalCouncil(result.votes, playerMap, { tie: result.tie, tied: result.tied });
-
-  await eliminatePlayer(game.id, result.eliminated, { juror: postMerge, placement: aliveBefore });
-  await moveOut(interaction.guild, result.eliminated, postMerge);
-
-  const aliveAfter = aliveBefore - 1;
-  let transition = '';
-  if (state.phase === 'tribe' && aliveAfter <= state.merge_at) {
-    await mergeGameState(game.id);
-    await updateGameState(game.id, { current_round: state.current_round + 1 });
-    transition = `\n\n🏝️ **THE MERGE!** ${aliveAfter} players remain — individual game from here.`;
-    await post(interaction.guild, CH.announcements, `🏝️ **THE MERGE!** ${aliveAfter} players remain. It is now every player for themselves.`);
-  } else if (aliveAfter <= 3) {
-    const finalists = alivePlayers(await getPlayers(game.id)).map((p) => p.discord_id);
-    await updateGameState(game.id, { phase: 'final', finalist_pool: finalists, current_round: state.current_round + 1 });
-    transition = `\n\n🔥 **FINAL 3: ${finalists.map((id) => playerMap.get(id)).join(', ')}.** Host: run \`/finaltribal\`.`;
-  } else {
-    await updateGameState(game.id, { current_round: state.current_round + 1 });
+  resolvingGames.add(game.id);
+  try {
+    const r = await resolveEliminationTribal(interaction.guild, game.id);
+    if (!r.ok) { await interaction.editReply(r.reason === 'novotes' ? 'No votes have been cast yet.' : 'There is no Tribal Council to hold right now.'); return; }
+    await interaction.editReply(r.msg);
+  } finally {
+    resolvingGames.delete(game.id);
   }
-
-  const name = playerMap.get(result.eliminated) || 'Player';
-  let msg = `🔥 **TRIBAL COUNCIL**\n\n${narration}\n\n**Final tally:**\n`;
-  result.votes.forEach(([id, c]) => { msg += `• ${playerMap.get(id) || 'Unknown'}: ${c} vote${c > 1 ? 's' : ''}${id === result.eliminated ? ' ❌' : ''}\n`; });
-  msg += `\n**${name}, the tribe has spoken. 🔦**${postMerge ? ' You are now on the **Jury**.' : ' You are now a **Pre-merge boot**.'}${transition}`;
-  await post(interaction.guild, CH.tribal, msg);
-  await interaction.editReply(msg);
 }
 
 // ---------------------------------------------------------------------------
@@ -391,10 +438,11 @@ export async function handleStandings(interaction) {
 }
 
 // ---------------------------------------------------------------------------
-// Nightly auto-challenge — posts one random challenge to every live game's
-// #challenge-lobby at 7:30pm local time (override with CHALLENGE_HOUR/MINUTE).
+// Scheduled auto-challenge — posts one random challenge to every live game's
+// #challenge-lobby twice a week (Sunday & Wednesday) at 7:30pm local time.
+// Override with CHALLENGE_HOUR / CHALLENGE_MINUTE / CHALLENGE_DAYS (0=Sun..6=Sat).
 // ---------------------------------------------------------------------------
-export async function postNightlyChallenges(client) {
+export async function postScheduledChallenges(client) {
   const { data: games } = await supabase.from('games').select('*').eq('status', 'live');
   for (const game of games || []) {
     const state = await getGameState(game.id);
@@ -409,23 +457,29 @@ export async function postNightlyChallenges(client) {
       ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
       : 'Every player for themselves. Only the top scorer is safe.';
     await post(guild, CH.lobby,
-      `🌙 **TONIGHT'S IMMUNITY CHALLENGE**\n\n${teamLine}\n\nEveryone plays the same challenge — enter here:\n${CHALLENGE_BASE}/${game.code}/challenge`);
+      `🔥 **IMMUNITY CHALLENGE**\n\n${teamLine}\n\nEveryone plays the same challenge — enter here:\n${CHALLENGE_BASE}/${game.code}/challenge`);
   }
 }
 
-export function startNightlyScheduler(client) {
+export function startChallengeScheduler(client) {
   const hour = Number(process.env.CHALLENGE_HOUR ?? 19);
   const minute = Number(process.env.CHALLENGE_MINUTE ?? 30);
+  // Days of week to post on: Sunday (0) and Wednesday (3) by default.
+  const days = (process.env.CHALLENGE_DAYS || '0,3').split(',').map((d) => Number(d.trim()));
   const run = async () => {
-    try { await postNightlyChallenges(client); } catch (e) { console.error('Nightly challenge failed:', e.message); }
+    try { await postScheduledChallenges(client); } catch (e) { console.error('Scheduled challenge failed:', e.message); }
   };
   const scheduleNext = () => {
     const now = new Date();
-    const next = new Date(now);
-    next.setHours(hour, minute, 0, 0);
-    if (next <= now) next.setDate(next.getDate() + 1);
+    let next = null;
+    for (let add = 0; add <= 7 && !next; add++) {
+      const cand = new Date(now);
+      cand.setDate(now.getDate() + add);
+      cand.setHours(hour, minute, 0, 0);
+      if (days.includes(cand.getDay()) && cand > now) next = cand;
+    }
     const ms = next.getTime() - now.getTime();
-    console.log(`⏰ Next nightly challenge: ${next.toLocaleString()}`);
+    console.log(`⏰ Next challenge drop: ${next.toLocaleString()}`);
     setTimeout(async () => { await run(); scheduleNext(); }, ms);
   };
   scheduleNext();
