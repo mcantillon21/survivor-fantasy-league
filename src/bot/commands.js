@@ -347,19 +347,18 @@ async function resolveEliminationTribal(guild, gameId) {
     return { ok: false, reason: 'waiting', votesCast, eligible: eligibleVoters.length };
   }
 
+  // A tie goes straight to a rock draw — one of the tied castaways randomly
+  // pulls the purple rock and is out. No revote.
+  let rockDraw = null;
   if (result.tie) {
-    const names = result.tied.map((id) => playerMap.get(id) || 'Unknown').join(' and ');
-    let msg = `🔥 **TRIBAL COUNCIL — TIE**\n\nThe vote is tied between **${names}**. No one leaves tonight yet.\n\n**Tally:**\n`;
-    result.votes.forEach(([id, count]) => { msg += `• ${playerMap.get(id) || 'Unknown'}: ${count} vote${count > 1 ? 's' : ''}\n`; });
-    msg += '\nThe ballot is reset. Everyone eligible must use `/vote` again.';
-    await supabase.from('votes').delete().eq('game_id', gameId).eq('round', state.current_round).eq('vote_type', 'elimination');
-    await post(guild, CH.tribal, msg);
-    return { ok: false, reason: 'tie', msg };
+    result.eliminated = result.tied[Math.floor(Math.random() * result.tied.length)];
+    rockDraw = { drawn: result.eliminated, tied: result.tied };
   }
 
   const aliveBefore = alivePlayers(players).length;
   const postMerge = state.phase === 'individual';
-  const narration = await narrateTribalCouncil(result.votes, playerMap);
+  const narration = await narrateTribalCouncil(result.votes, playerMap,
+    rockDraw ? { rockDraw: true, drawn: rockDraw.drawn, tied: rockDraw.tied } : {});
 
   await eliminatePlayer(gameId, result.eliminated, { juror: postMerge, placement: aliveBefore });
   await moveOut(guild, result.eliminated, postMerge);
@@ -385,8 +384,13 @@ async function resolveEliminationTribal(guild, gameId) {
   }
 
   const name = playerMap.get(result.eliminated) || 'Player';
-  let msg = `🔥 **TRIBAL COUNCIL**\n\n${narration}\n\n**Final tally:**\n`;
-  result.votes.forEach(([id, c]) => { msg += `• ${playerMap.get(id) || 'Unknown'}: ${c} vote${c > 1 ? 's' : ''}${id === result.eliminated ? ' ❌' : ''}\n`; });
+  const header = rockDraw ? '🔥 **TRIBAL COUNCIL — ROCK DRAW**' : '🔥 **TRIBAL COUNCIL**';
+  let msg = `${header}\n\n${narration}\n\n**${rockDraw ? 'Tied vote' : 'Final tally'}:**\n`;
+  result.votes.forEach(([id, c]) => {
+    const mark = id === result.eliminated ? (rockDraw ? ' 🟣' : ' ❌') : '';
+    msg += `• ${playerMap.get(id) || 'Unknown'}: ${c} vote${c > 1 ? 's' : ''}${mark}\n`;
+  });
+  if (rockDraw) msg += `\n🟣 **${name} drew the purple rock and is out of the game.**`;
   msg += `\n**${name}, the tribe has spoken. 🔦**${postMerge ? ' You are now on the **Jury**.' : ' You are now a **Pre-merge boot**.'}${transition}`;
   await post(guild, CH.tribal, msg);
   return { ok: true, msg };
