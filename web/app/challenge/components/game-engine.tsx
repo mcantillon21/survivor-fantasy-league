@@ -13,7 +13,7 @@ import {
   shuffleSeeded,
 } from '@/lib/challenges/logic';
 import { Chess, type Square } from 'chess.js';
-import { CHESS_PUZZLES } from '@/lib/challenges/chess-puzzles';
+import { PUZZLES_BY_TIER, defenderIsLost, toughestDefence } from '@/lib/challenges/chess-puzzles';
 import type { EngineProps } from './engine-types';
 
 function useStoredGameState<T>(key: string, initialState: T): [T, Dispatch<SetStateAction<T>>] {
@@ -630,68 +630,122 @@ function VaultLock({ seed, onComplete }: EngineProps) {
 
 const PIECE_GLYPH: Record<string, string> = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
 
-// Chess.com Puzzle Rush–style challenge: 5 minutes to solve as many mate-in-1
-// puzzles as you can. A puzzle is solved when your move delivers checkmate.
+// Chess.com Puzzle Rush–style challenge: 5 minutes to solve as many mate
+// puzzles as you can. Puzzles ramp in difficulty — all mate-in-1s first, then
+// mate-in-2s, then mate-in-3s. On the longer puzzles the engine plays the
+// toughest defence between your moves; a puzzle counts only if every one of
+// your moves keeps the mate forced, ending in checkmate.
 function ChessPuzzleRush({ seed, onComplete }: EngineProps) {
   const DURATION = 300; // 5 minutes
-  const order = useMemo(() => shuffleSeeded(CHESS_PUZZLES.map((_, i) => i), `chess:${seed}`), [seed]);
-  const [pos, setPos] = useState(0);
+  // Ramp difficulty: shuffled mate-in-1s, then mate-in-2s, then mate-in-3s.
+  const order = useMemo(
+    () => ([1, 2, 3] as const).flatMap((tier) => shuffleSeeded([...PUZZLES_BY_TIER[tier]], `chess:${tier}:${seed}`)),
+    [seed],
+  );
+
+  // Position within the current puzzle. `pos` indexes `order`; `fen` is the live
+  // board (which the engine mutates between moves); `movesMade` counts the
+  // player's attacker moves so far. All three reset together in `advance()`, so
+  // no state-syncing effect is needed.
+  const [board, setBoard] = useState(() => ({ pos: 0, fen: order[0].fen, movesMade: 0 }));
+  const active = order[board.pos % order.length];
   const [selected, setSelected] = useState<string | null>(null);
-  const [solved, setSolved] = useState(0);
-  const [feedback, setFeedback] = useState<'idle' | 'solved' | 'wrong'>('idle');
+  const [busy, setBusy] = useState(false); // engine is replying — block input
+  const [counts, setCounts] = useState({ m1: 0, m2: 0, m3: 0 });
+  const [feedback, setFeedback] = useState<'idle' | 'solved' | 'wrong' | 'progress'>('idle');
   const [secondsLeft, setSecondsLeft] = useState(DURATION);
   const doneRef = useRef(false);
+  const statsRef = useRef({ m1: 0, m2: 0, m3: 0 });
 
-  const puzzle = CHESS_PUZZLES[order[pos % order.length]];
-  const game = useMemo(() => new Chess(puzzle.fen), [puzzle.fen]);
-  const turn = game.turn();
+  const attackerColor = useMemo(() => new Chess(active.fen).turn(), [active.fen]);
+  const game = useMemo(() => new Chess(board.fen), [board.fen]);
+  const solvedTotal = counts.m1 + counts.m2 + counts.m3;
 
-  const finish = useCallback((finalSolved: number) => {
+  const finish = useCallback(() => {
     if (doneRef.current) return;
     doneRef.current = true;
+    const s = statsRef.current;
+    const points = s.m1 + s.m2 * 2 + s.m3 * 3;
+    const total = s.m1 + s.m2 + s.m3;
     onComplete({
-      rawScore: Math.min(1000, Math.round((finalSolved / 12) * 1000)),
-      summary: `${finalSolved} mate-in-1 puzzle${finalSolved === 1 ? '' : 's'} solved in 5 minutes.`,
+      rawScore: Math.min(1000, Math.round((points / 15) * 1000)),
+      summary: `${total} puzzle${total === 1 ? '' : 's'} solved in 5 minutes (${s.m1}× mate-in-1, ${s.m2}× mate-in-2, ${s.m3}× mate-in-3).`,
     });
   }, [onComplete]);
 
   useEffect(() => {
-    if (secondsLeft <= 0) { finish(solved); return; }
+    if (secondsLeft <= 0) { finish(); return; }
     const t = window.setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
     return () => window.clearTimeout(t);
-  }, [secondsLeft, solved, finish]);
+  }, [secondsLeft, finish]);
 
-  const advance = () => { setSelected(null); setPos((p) => p + 1); };
+  const advance = () => {
+    setSelected(null);
+    setBusy(false);
+    setBoard((b) => {
+      const next = b.pos + 1;
+      return { pos: next, fen: order[next % order.length].fen, movesMade: 0 };
+    });
+  };
 
-  const attempt = (from: string, to: string) => {
-    const probe = new Chess(puzzle.fen);
-    let move = null;
-    try { move = probe.move({ from: from as Square, to: to as Square, promotion: 'q' }); } catch { move = null; }
-    if (!move) { setSelected(null); return; } // illegal move — ignore
-    if (probe.isCheckmate()) {
-      setSolved((n) => n + 1);
-      setFeedback('solved');
-    } else {
-      setFeedback('wrong');
-    }
+  const recordSolve = () => {
+    const key = `m${active.mateIn}` as 'm1' | 'm2' | 'm3';
+    statsRef.current = { ...statsRef.current, [key]: statsRef.current[key] + 1 };
+    setCounts(statsRef.current);
+  };
+
+  const flashThenAdvance = (kind: 'solved' | 'wrong') => {
+    setFeedback(kind);
     window.setTimeout(() => setFeedback('idle'), 500);
     advance();
   };
 
+  const attempt = (from: string, to: string) => {
+    const probe = new Chess(board.fen);
+    let move = null;
+    try { move = probe.move({ from: from as Square, to: to as Square, promotion: 'q' }); } catch { move = null; }
+    if (!move) { setSelected(null); return; } // illegal move — ignore
+
+    if (probe.isCheckmate()) { recordSolve(); flashThenAdvance('solved'); return; }
+
+    // Not mate yet: the move only counts if it keeps the mate forced within the
+    // remaining budget. attackerLeft = attacker moves still allowed after this one.
+    const attackerLeft = active.mateIn - (board.movesMade + 1);
+    if (attackerLeft >= 1 && defenderIsLost(probe, attackerLeft)) {
+      // On track — show the player's move, then let the engine defend.
+      const after = probe.fen();
+      setBoard((b) => ({ ...b, fen: after, movesMade: b.movesMade + 1 }));
+      setSelected(null);
+      setFeedback('progress');
+      setBusy(true);
+      window.setTimeout(() => {
+        if (doneRef.current) return;
+        const g = new Chess(after);
+        const defence = toughestDefence(g, attackerLeft);
+        if (defence) g.move(defence);
+        setBoard((b) => ({ ...b, fen: g.fen() }));
+        setBusy(false);
+      }, 450);
+      return;
+    }
+
+    flashThenAdvance('wrong'); // wrong move — the mate is no longer forced
+  };
+
   const clickSquare = (square: string) => {
-    if (secondsLeft <= 0 || doneRef.current) return;
+    if (secondsLeft <= 0 || doneRef.current || busy) return;
     const piece = game.get(square as Square);
     if (selected) {
       if (square === selected) { setSelected(null); return; }
-      if (piece && piece.color === turn) { setSelected(square); return; }
+      if (piece && piece.color === attackerColor) { setSelected(square); return; }
       attempt(selected, square);
-    } else if (piece && piece.color === turn) {
+    } else if (piece && piece.color === attackerColor) {
       setSelected(square);
     }
   };
 
-  const board = game.board();
-  const flip = turn === 'b'; // put the side to move at the bottom
+  const grid = game.board();
+  const flip = attackerColor === 'b'; // put the side to move at the bottom
   const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
   const ss = String(secondsLeft % 60).padStart(2, '0');
 
@@ -701,7 +755,7 @@ function ChessPuzzleRush({ seed, onComplete }: EngineProps) {
     for (let dc = 0; dc < 8; dc++) {
       const f = flip ? 7 - dc : dc;
       const square = `${String.fromCharCode(97 + f)}${8 - r}`;
-      const piece = board[r][f];
+      const piece = grid[r][f];
       const light = (r + f) % 2 === 0;
       const bg = selected === square ? '#f4f169' : light ? '#f0d9b5' : '#b58863';
       cells.push(
@@ -715,13 +769,21 @@ function ChessPuzzleRush({ seed, onComplete }: EngineProps) {
 
   return (
     <section className="engine-board engine-board--chess" aria-labelledby="chess-title">
-      <div className="engine-progress"><span>Solved {solved}</span><span aria-label={`${secondsLeft} seconds left`}>⏱ {mm}:{ss}</span></div>
-      <h2 id="chess-title">{turn === 'w' ? 'White' : 'Black'} to move — mate in 1</h2>
+      <div className="engine-progress"><span>Solved {solvedTotal}</span><span aria-label={`${secondsLeft} seconds left`}>⏱ {mm}:{ss}</span></div>
+      <h2 id="chess-title">{attackerColor === 'w' ? 'White' : 'Black'} to move — mate in {active.mateIn}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', width: '100%', maxWidth: 360, margin: '0 auto', border: '3px solid #3a2a1a', borderRadius: 6, overflow: 'hidden' }} role="grid" aria-label="Chess board">
         {cells}
       </div>
       <p className="engine-penalty" aria-live="polite">
-        {feedback === 'solved' ? '✅ Checkmate! Next puzzle…' : feedback === 'wrong' ? '❌ Not mate — next puzzle.' : 'Click a piece, then its target square. Solve as many as you can.'}
+        {feedback === 'solved'
+          ? '✅ Checkmate! Next puzzle…'
+          : feedback === 'wrong'
+            ? '❌ The mate is no longer forced — next puzzle.'
+            : feedback === 'progress' || busy
+              ? '↪ Good move — now finish the mate.'
+              : active.mateIn === 1
+                ? 'Click a piece, then its target square. Solve as many as you can.'
+                : 'Find the forcing line — the engine will answer with its best defence.'}
       </p>
       <div className="engine-actions">
         <button type="button" className="button button--ghost" onClick={advance}>Skip</button>
