@@ -102,16 +102,22 @@ const commands = [
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+const GUILD_ID = process.env.DISCORD_GUILD_ID || '1525547231086645409';
 
-// Register slash commands
+// Register slash commands. Guild commands update INSTANTLY (global commands can
+// take up to ~1h to propagate), so register to the guild and clear any stale
+// global copies to avoid duplicates.
 async function registerCommands() {
   try {
     console.log('Registering slash commands...');
-    await rest.put(
-      Routes.applicationCommands(process.env.DISCORD_CLIENT_ID),
-      { body: commands }
-    );
-    console.log('✓ Slash commands registered');
+    if (GUILD_ID) {
+      await rest.put(Routes.applicationGuildCommands(process.env.DISCORD_CLIENT_ID, GUILD_ID), { body: commands });
+      await rest.put(Routes.applicationCommands(process.env.DISCORD_CLIENT_ID), { body: [] }).catch(() => {});
+      console.log(`✓ Slash commands registered to guild ${GUILD_ID} (instant)`);
+    } else {
+      await rest.put(Routes.applicationCommands(process.env.DISCORD_CLIENT_ID), { body: commands });
+      console.log('✓ Slash commands registered globally');
+    }
   } catch (error) {
     console.error('Failed to register commands:', error);
   }
