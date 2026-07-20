@@ -92,6 +92,7 @@ const commands = [
     description: 'Form tribes and begin the season (host only)',
     options: [
       { name: 'test', type: 5, description: 'Test mode: start with any even number of players (>=2)', required: false },
+      { name: 'merged', type: 5, description: 'Test mode: start already merged, no tribes (>=4 players)', required: false },
     ],
   },
   {
