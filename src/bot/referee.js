@@ -168,10 +168,16 @@ export async function eliminatePlayer(gameId, discordId, { juror, placement }) {
 
 export async function narrateTribalCouncil(votes, playerMap, extra = {}) {
   const board = votes.map(([id, c]) => `${playerMap.get(id) || 'Unknown'}: ${c} vote${c > 1 ? 's' : ''}`).join('\n');
-  const tieNote = extra.tie
-    ? ` The vote tied between ${extra.tied.map((id) => playerMap.get(id) || 'Unknown').join(' and ')}.`
-    : '';
-  const prompt = `You are Jeff Probst at Tribal Council. The votes are tallied:\n\n${board}${tieNote}\n\nWrite a dramatic 2-3 sentence reveal of who was voted out. Build suspense, then deliver. Theatrical but concise.`;
+
+  // Tie broken by a rock draw: one tied castaway pulled the purple rock.
+  if (extra.rockDraw && extra.drawn) {
+    const drawnName = playerMap.get(extra.drawn) || 'A castaway';
+    const tiedNames = (extra.tied || []).map((id) => playerMap.get(id) || 'Unknown').join(' and ');
+    const prompt = `You are Jeff Probst at Tribal Council. The vote deadlocked in a tie between ${tiedNames}, so it goes to a rock draw. ${drawnName} drew the PURPLE ROCK and is out of the game. Write a dramatic 2-3 sentence reveal: name the tie, describe the tense drawing of rocks, and reveal that ${drawnName} pulled the purple rock and must leave. Theatrical but concise.`;
+    return narration(prompt, `It's a tie between ${tiedNames} — we go to rocks. ${drawnName} drew the purple rock. ${drawnName}, the tribe has spoken.`, 240);
+  }
+
+  const prompt = `You are Jeff Probst at Tribal Council. The votes are tallied:\n\n${board}\n\nWrite a dramatic 2-3 sentence reveal of who was voted out. Build suspense, then deliver. Theatrical but concise.`;
   const eliminated = votes[0]?.[0];
   const eliminatedName = playerMap.get(eliminated) || 'The player with the most votes';
   return narration(prompt, `${eliminatedName}, the tribe has spoken.`, 220);
