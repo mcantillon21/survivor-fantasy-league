@@ -165,12 +165,17 @@ export async function handleStart(interaction) {
   const game = await getCurrentGame(interaction.guildId);
   if (!game) { await interaction.editReply('No season exists. Create one with `/newgame` first.'); return; }
 
-  // Admin-only test flag: start with any even number of players (>=2).
-  // /start is already host-gated, so only an admin/host can use this.
+  // Admin-only test flags (/start is already host-gated):
+  //  • test   — start with any even number of players (>=2), tribe phase.
+  //  • merged — skip tribes and start already merged (individual phase). Good
+  //    for small test games that would otherwise choke on the tribe→merge step.
   const test = interaction.options.getBoolean('test') ?? false;
-  const result = test
-    ? await startGame(game.id, { minPlayers: 2, requireEven: true })
-    : await startGame(game.id);
+  const merged = interaction.options.getBoolean('merged') ?? false;
+  const result = merged
+    ? await startGame(game.id, { minPlayers: 4, merged: true })
+    : test
+      ? await startGame(game.id, { minPlayers: 2, requireEven: true })
+      : await startGame(game.id);
   if (result.error) { await interaction.editReply(result.error); return; }
   await supabase.from('games').update({ status: 'live', started_at: new Date().toISOString() }).eq('id', game.id);
 
@@ -178,20 +183,27 @@ export async function handleStart(interaction) {
   if (guild) {
     for (const p of alivePlayers(await getPlayers(game.id))) {
       await addRole(guild, p.discord_id, ROLE.player);
-      await grantTribeChannel(guild, p.discord_id, p.tribe);
+      if (!merged) await grantTribeChannel(guild, p.discord_id, p.tribe);
     }
     // Registration is closed — lock #announcements back to a read-only feed.
     const ann = findChannel(guild, CH.announcements);
     if (ann) await ann.permissionOverwrites.edit(guild.id, { SendMessages: false }).catch((e) => console.error('lock announcements:', e.message));
   }
 
-  let msg = `🌴 **THE GAME BEGINS** — ${result.count} castaways, two tribes.\n\n`;
-  for (const [tribe, members] of Object.entries(result.rosters)) {
-    const emoji = tribe === 'red' ? '🔴' : tribe === 'blue' ? '🔵' : '•';
-    msg += `${emoji} **Tribe ${tribe} (${members.length})**\n${members.map((m) => `• ${m}`).join('\n')}\n\n`;
+  let msg;
+  if (merged) {
+    msg = `🌴 **THE GAME BEGINS — MERGED TEST** — ${result.count} individuals, no tribes.\n\n`;
+    msg += result.rosters.everyone.map((m) => `• ${m}`).join('\n');
+    msg += `\n\nIndividual immunity from round one — top scorer is safe, everyone votes. Play down to the final 3, then \`/finaltribal\`.`;
+  } else {
+    msg = `🌴 **THE GAME BEGINS** — ${result.count} castaways, two tribes.\n\n`;
+    for (const [tribe, members] of Object.entries(result.rosters)) {
+      const emoji = tribe === 'red' ? '🔴' : tribe === 'blue' ? '🔵' : '•';
+      msg += `${emoji} **Tribe ${tribe} (${members.length})**\n${members.map((m) => `• ${m}`).join('\n')}\n\n`;
+    }
+    if (test) msg += `⚠️ **Test mode** — started with a reduced roster of ${result.count}.\n\n`;
+    msg += `Each tribe only sees its own channel. The host will post the first immunity challenge — merge at ${result.mergeAt}.`;
   }
-  if (test) msg += `⚠️ **Test mode** — started with a reduced roster of ${result.count}.\n\n`;
-  msg += `Each tribe only sees its own channel. The host will post the first immunity challenge — merge at ${result.mergeAt}.`;
   await post(guild, CH.announcements, msg);
   await interaction.editReply(msg);
 }
