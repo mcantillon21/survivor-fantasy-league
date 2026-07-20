@@ -90,6 +90,9 @@ const commands = [
   {
     name: 'start',
     description: 'Form tribes and begin the season (host only)',
+    options: [
+      { name: 'test', type: 5, description: 'Test mode: start with any even number of players (>=2)', required: false },
+    ],
   },
   {
     name: 'endgame',
