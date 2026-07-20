@@ -64,10 +64,11 @@ function shuffle(array) {
 }
 
 // Shuffle registered players into two tribes and reset to round 1 / tribe phase.
-export async function startGame(gameId) {
+export async function startGame(gameId, { minPlayers = 6, requireEven = false } = {}) {
   const state = await getGameState(gameId);
   const players = await getPlayers(gameId);
-  if (players.length < 6) return { error: 'Need at least 6 registered Discord players to start.' };
+  if (players.length < minPlayers) return { error: `Need at least ${minPlayers} registered players to start.` };
+  if (requireEven && players.length % 2 !== 0) return { error: `Test mode needs an even number of players — you have ${players.length}. Add or remove one.` };
 
   const [tribeA, tribeB] = state?.tribe_names || ['red', 'blue'];
   const shuffled = shuffle(players);

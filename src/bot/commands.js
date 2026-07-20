@@ -157,7 +157,12 @@ export async function handleStart(interaction) {
   const game = await getCurrentGame(interaction.guildId);
   if (!game) { await interaction.editReply('No season exists. Create one with `/newgame` first.'); return; }
 
-  const result = await startGame(game.id);
+  // Admin-only test flag: start with any even number of players (>=2).
+  // /start is already host-gated, so only an admin/host can use this.
+  const test = interaction.options.getBoolean('test') ?? false;
+  const result = test
+    ? await startGame(game.id, { minPlayers: 2, requireEven: true })
+    : await startGame(game.id);
   if (result.error) { await interaction.editReply(result.error); return; }
   await supabase.from('games').update({ status: 'live', started_at: new Date().toISOString() }).eq('id', game.id);
 
@@ -174,6 +179,7 @@ export async function handleStart(interaction) {
     const emoji = tribe === 'red' ? '🔴' : tribe === 'blue' ? '🔵' : '•';
     msg += `${emoji} **Tribe ${tribe} (${members.length})**\n${members.map((m) => `• ${m}`).join('\n')}\n\n`;
   }
+  if (test) msg += `⚠️ **Test mode** — started with a reduced roster of ${result.count}.\n\n`;
   msg += `Each tribe only sees its own channel. The host will post the first immunity challenge — merge at ${result.mergeAt}.`;
   await post(guild, CH.announcements, msg);
   await interaction.editReply(msg);
