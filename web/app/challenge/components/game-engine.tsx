@@ -12,6 +12,8 @@ import {
   scoreCoordinateGuess,
   shuffleSeeded,
 } from '@/lib/challenges/logic';
+import { Chess, type Square } from 'chess.js';
+import { CHESS_PUZZLES } from '@/lib/challenges/chess-puzzles';
 import type { EngineProps } from './engine-types';
 
 function useStoredGameState<T>(key: string, initialState: T): [T, Dispatch<SetStateAction<T>>] {
@@ -626,6 +628,108 @@ function VaultLock({ seed, onComplete }: EngineProps) {
   );
 }
 
+const PIECE_GLYPH: Record<string, string> = { p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚' };
+
+// Chess.com Puzzle Rush–style challenge: 5 minutes to solve as many mate-in-1
+// puzzles as you can. A puzzle is solved when your move delivers checkmate.
+function ChessPuzzleRush({ seed, onComplete }: EngineProps) {
+  const DURATION = 300; // 5 minutes
+  const order = useMemo(() => shuffleSeeded(CHESS_PUZZLES.map((_, i) => i), `chess:${seed}`), [seed]);
+  const [pos, setPos] = useState(0);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [solved, setSolved] = useState(0);
+  const [feedback, setFeedback] = useState<'idle' | 'solved' | 'wrong'>('idle');
+  const [secondsLeft, setSecondsLeft] = useState(DURATION);
+  const doneRef = useRef(false);
+
+  const puzzle = CHESS_PUZZLES[order[pos % order.length]];
+  const game = useMemo(() => new Chess(puzzle.fen), [puzzle.fen]);
+  const turn = game.turn();
+
+  const finish = useCallback((finalSolved: number) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onComplete({
+      rawScore: Math.min(1000, Math.round((finalSolved / 12) * 1000)),
+      summary: `${finalSolved} mate-in-1 puzzle${finalSolved === 1 ? '' : 's'} solved in 5 minutes.`,
+    });
+  }, [onComplete]);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) { finish(solved); return; }
+    const t = window.setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [secondsLeft, solved, finish]);
+
+  const advance = () => { setSelected(null); setPos((p) => p + 1); };
+
+  const attempt = (from: string, to: string) => {
+    const probe = new Chess(puzzle.fen);
+    let move = null;
+    try { move = probe.move({ from: from as Square, to: to as Square, promotion: 'q' }); } catch { move = null; }
+    if (!move) { setSelected(null); return; } // illegal move — ignore
+    if (probe.isCheckmate()) {
+      setSolved((n) => n + 1);
+      setFeedback('solved');
+    } else {
+      setFeedback('wrong');
+    }
+    window.setTimeout(() => setFeedback('idle'), 500);
+    advance();
+  };
+
+  const clickSquare = (square: string) => {
+    if (secondsLeft <= 0 || doneRef.current) return;
+    const piece = game.get(square as Square);
+    if (selected) {
+      if (square === selected) { setSelected(null); return; }
+      if (piece && piece.color === turn) { setSelected(square); return; }
+      attempt(selected, square);
+    } else if (piece && piece.color === turn) {
+      setSelected(square);
+    }
+  };
+
+  const board = game.board();
+  const flip = turn === 'b'; // put the side to move at the bottom
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+  const ss = String(secondsLeft % 60).padStart(2, '0');
+
+  const cells = [];
+  for (let dr = 0; dr < 8; dr++) {
+    const r = flip ? 7 - dr : dr;
+    for (let dc = 0; dc < 8; dc++) {
+      const f = flip ? 7 - dc : dc;
+      const square = `${String.fromCharCode(97 + f)}${8 - r}`;
+      const piece = board[r][f];
+      const light = (r + f) % 2 === 0;
+      const bg = selected === square ? '#f4f169' : light ? '#f0d9b5' : '#b58863';
+      cells.push(
+        <button key={square} type="button" onClick={() => clickSquare(square)} aria-label={square}
+          style={{ aspectRatio: '1', background: bg, border: 'none', padding: 0, cursor: 'pointer', fontSize: 26, lineHeight: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: piece?.color === 'w' ? '#fafafa' : '#111', textShadow: piece?.color === 'w' ? '0 0 2px #000, 0 0 1px #000' : 'none' }}>
+          {piece ? PIECE_GLYPH[piece.type] : ''}
+        </button>
+      );
+    }
+  }
+
+  return (
+    <section className="engine-board engine-board--chess" aria-labelledby="chess-title">
+      <div className="engine-progress"><span>Solved {solved}</span><span aria-label={`${secondsLeft} seconds left`}>⏱ {mm}:{ss}</span></div>
+      <h2 id="chess-title">{turn === 'w' ? 'White' : 'Black'} to move — mate in 1</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', width: '100%', maxWidth: 360, margin: '0 auto', border: '3px solid #3a2a1a', borderRadius: 6, overflow: 'hidden' }} role="grid" aria-label="Chess board">
+        {cells}
+      </div>
+      <p className="engine-penalty" aria-live="polite">
+        {feedback === 'solved' ? '✅ Checkmate! Next puzzle…' : feedback === 'wrong' ? '❌ Not mate — next puzzle.' : 'Click a piece, then its target square. Solve as many as you can.'}
+      </p>
+      <div className="engine-actions">
+        <button type="button" className="button button--ghost" onClick={advance}>Skip</button>
+      </div>
+    </section>
+  );
+}
+
 export function GameEngine({ slug, ...props }: EngineProps & { slug: string }) {
   switch (slug) {
     case 'fire-signal-cipher': return <FireSignalCipher {...props} />;
@@ -643,6 +747,7 @@ export function GameEngine({ slug, ...props }: EngineProps & { slug: string }) {
     case 'command-from-camp': return <CommandFromCamp {...props} />;
     case 'vault-lock': return <VaultLock {...props} />;
     case 'riddle-trials': return <RiddleTrials {...props} />;
+    case 'puzzle-rush': return <ChessPuzzleRush {...props} />;
     default: return null;
   }
 }

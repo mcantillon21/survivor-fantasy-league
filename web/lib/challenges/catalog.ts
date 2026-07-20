@@ -197,6 +197,18 @@ export const CHALLENGES: ChallengeDefinition[] = [
     speedWeight: 1,
     rules: ['Answer each riddle to unlock the next.', 'One or two words, or a number.', 'Wrong attempts cost points.'],
   },
+  {
+    slug: 'puzzle-rush',
+    name: 'Puzzle Rush',
+    number: '16',
+    tagline: 'Five minutes. As many mates as you can.',
+    description: 'A chess.com Puzzle Rush–style sprint: solve as many mate-in-1 puzzles as you can before the clock runs out.',
+    category: 'Puzzle',
+    difficulty: 'Hard',
+    duration: '5 min',
+    speedWeight: 0,
+    rules: ['Click a piece, then its target square.', 'Each puzzle is mate in one move.', 'Solve as many as you can in 5 minutes.'],
+  },
 ];
 
 export function getChallenge(slug: string) {

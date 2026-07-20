@@ -14,6 +14,7 @@ export const CHALLENGE_CHOICES = [
   { name: 'Command From Camp', value: 'command-from-camp' },
   { name: 'Vault Lock', value: 'vault-lock' },
   { name: 'Riddle Trials', value: 'riddle-trials' },
+  { name: 'Puzzle Rush', value: 'puzzle-rush' },
 ];
 
 export function getChallengeName(slug) {
