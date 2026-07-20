@@ -124,7 +124,15 @@ export async function handleNewGame(interaction) {
   await supabase.from('game_state').insert({
     game_id: game.id, phase: 'tribe', current_round: 1, merge_at: 12, tribe_names: ['red', 'blue'],
   });
-  await interaction.editReply(`🌱 Season **${name}** created (\`${code}\`). Players use \`/register\`, then the host runs \`/start\`.`);
+
+  // Re-open #announcements as the pre-game lobby so players can /register.
+  const guild = interaction.guild;
+  if (guild) {
+    const ann = findChannel(guild, CH.announcements);
+    if (ann) await ann.permissionOverwrites.edit(guild.id, { SendMessages: true, UseApplicationCommands: true }).catch((e) => console.error('open announcements:', e.message));
+  }
+
+  await interaction.editReply(`🌱 Season **${name}** created (\`${code}\`). Players use \`/register\` in #announcements, then the host runs \`/start\`.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -172,6 +180,9 @@ export async function handleStart(interaction) {
       await addRole(guild, p.discord_id, ROLE.player);
       await grantTribeChannel(guild, p.discord_id, p.tribe);
     }
+    // Registration is closed — lock #announcements back to a read-only feed.
+    const ann = findChannel(guild, CH.announcements);
+    if (ann) await ann.permissionOverwrites.edit(guild.id, { SendMessages: false }).catch((e) => console.error('lock announcements:', e.message));
   }
 
   let msg = `🌴 **THE GAME BEGINS** — ${result.count} castaways, two tribes.\n\n`;
