@@ -188,6 +188,10 @@ export async function handleStart(interaction) {
     // Registration is closed — lock #announcements back to a read-only feed.
     const ann = findChannel(guild, CH.announcements);
     if (ann) await ann.permissionOverwrites.edit(guild.id, { SendMessages: false }).catch((e) => console.error('lock announcements:', e.message));
+    // Everyone still in the game (Player role) can cast votes in #tribal-council.
+    const playerRole = findRole(guild, ROLE.player);
+    const tc = findChannel(guild, CH.tribal);
+    if (playerRole && tc) await tc.permissionOverwrites.edit(playerRole.id, { ViewChannel: true, SendMessages: true, UseApplicationCommands: true }).catch((e) => console.error('tribal-council perms:', e.message));
   }
 
   let msg;
