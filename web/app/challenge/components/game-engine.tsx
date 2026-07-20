@@ -116,30 +116,41 @@ function TextStageEngine({
   persistenceKey,
   onComplete,
 }: EngineProps & { stages: TextStage[] }) {
-  const [state, setState] = useStoredGameState(persistenceKey, { index: 0, mistakes: 0 });
+  const [state, setState] = useStoredGameState(persistenceKey, { index: 0, mistakes: 0, solved: 0 });
   const [value, setValue] = useState('');
   const [error, setError] = useState('');
   const stage = stages[state.index];
+  const solvedSoFar = state.solved || 0;
+  const mistakesSoFar = state.mistakes || 0;
+
+  const finish = (solved: number) => {
+    const skipped = stages.length - solved;
+    const rawScore = Math.max(0, Math.round((solved / stages.length) * 1000) - mistakesSoFar * 25);
+    const summary = `Solved ${solved} of ${stages.length}${skipped ? `, skipped ${skipped}` : ''}${mistakesSoFar ? `, ${mistakesSoFar} wrong ${mistakesSoFar === 1 ? 'attempt' : 'attempts'}` : ''}.`;
+    onComplete({ rawScore, summary });
+  };
+
+  // Advance to the next stage, or finish. `didSolve` says whether this stage was solved (vs skipped).
+  const advance = (didSolve: boolean) => {
+    const solved = solvedSoFar + (didSolve ? 1 : 0);
+    if (state.index === stages.length - 1) { finish(solved); return; }
+    setState({ index: state.index + 1, mistakes: mistakesSoFar, solved });
+    setValue('');
+    setError('');
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!value.trim()) {
-      setError('Enter an answer before testing the lock.');
+      setError('Enter an answer, or skip this puzzle.');
       return;
     }
     if (normalizeAnswer(value) !== normalizeAnswer(stage.answer)) {
-      const mistakes = state.mistakes + 1;
-      setState({ ...state, mistakes });
-      setError('That does not open the lock. Recheck the clue and try again.');
+      setState({ ...state, mistakes: mistakesSoFar + 1 });
+      setError('That is not right. Try again, or skip it for no points.');
       return;
     }
-    if (state.index === stages.length - 1) {
-      onComplete({ rawScore: Math.max(200, 1000 - state.mistakes * 120), summary: `${stages.length} stages cleared with ${state.mistakes} wrong ${state.mistakes === 1 ? 'attempt' : 'attempts'}.` });
-      return;
-    }
-    setState({ index: state.index + 1, mistakes: state.mistakes });
-    setValue('');
-    setError('');
+    advance(true);
   };
 
   return (
@@ -152,7 +163,10 @@ function TextStageEngine({
         <div><input id="puzzle-answer" value={value} onChange={(event) => { setValue(event.target.value); setError(''); }} autoComplete="off" spellCheck="false" /><button className="button button--primary" type="submit">Test answer</button></div>
         {error && <p className="field-error" role="alert">{error}</p>}
       </form>
-      <p className="engine-penalty">Wrong attempts: {state.mistakes}</p>
+      <div className="engine-actions">
+        <button type="button" className="button button--ghost" onClick={() => advance(false)}>Skip this puzzle (no points)</button>
+      </div>
+      <p className="engine-penalty">Solved {solvedSoFar} / {stages.length} · Wrong attempts: {mistakesSoFar}</p>
     </section>
   );
 }
@@ -242,6 +256,9 @@ function TorchlightLabyrinth({ seed, persistenceKey, onComplete }: EngineProps) 
         <button type="button" aria-label="Move down" onClick={() => move(1, 0)}>↓</button>
         <button type="button" aria-label="Move right" onClick={() => move(0, 1)}>→</button>
       </div>
+      <div className="engine-actions">
+        <button type="button" className="button button--ghost" onClick={() => onComplete({ rawScore: 0, summary: 'Skipped the labyrinth.' })}>Skip (no points)</button>
+      </div>
     </section>
   );
 }
@@ -303,6 +320,7 @@ function IslandCoordinates({ seed, persistenceKey, onComplete }: EngineProps) {
   const [state, setState] = useStoredGameState<{ guesses: string[][]; current: string[] }>(persistenceKey, { guesses: [], current: [] });
   const addSymbol = (symbol: string) => state.current.length < 4 && setState({ ...state, current: [...state.current, symbol] });
 
+  const MAX_GUESSES = 8;
   const submitGuess = () => {
     if (state.current.length !== 4) return;
     const feedback = scoreCoordinateGuess(secret, state.current);
@@ -310,8 +328,14 @@ function IslandCoordinates({ seed, persistenceKey, onComplete }: EngineProps) {
       onComplete({ rawScore: Math.max(230, 1000 - state.guesses.length * 110), summary: `The landing coordinates were solved in ${state.guesses.length + 1} guesses.` });
       return;
     }
-    setState({ guesses: [...state.guesses, state.current], current: [] });
+    const guesses = [...state.guesses, state.current];
+    if (guesses.length >= MAX_GUESSES) {
+      onComplete({ rawScore: 0, summary: 'Ran out of guesses — the coordinates were not cracked.' });
+      return;
+    }
+    setState({ guesses, current: [] });
   };
+  const giveUp = () => onComplete({ rawScore: 0, summary: 'Skipped the coordinates puzzle.' });
 
   return (
     <section className="engine-board engine-board--coordinates" aria-labelledby="coordinates-title">
@@ -325,7 +349,7 @@ function IslandCoordinates({ seed, persistenceKey, onComplete }: EngineProps) {
       </div>
       <div className="coordinate-current">{Array.from({ length: 4 }, (_, index) => <span key={index}>{state.current[index] || '·'}</span>)}</div>
       <div className="symbol-palette">{SYMBOLS.map((symbol) => <button key={symbol} type="button" onClick={() => addSymbol(symbol)}>{symbol}</button>)}</div>
-      <div className="engine-actions"><button type="button" className="button button--ghost" onClick={() => setState({ ...state, current: state.current.slice(0, -1) })}>Undo</button><button type="button" className="button button--primary" disabled={state.current.length !== 4} onClick={submitGuess}>Test coordinates</button></div>
+      <div className="engine-actions"><button type="button" className="button button--ghost" onClick={() => setState({ ...state, current: state.current.slice(0, -1) })}>Undo</button><button type="button" className="button button--primary" disabled={state.current.length !== 4} onClick={submitGuess}>Test coordinates</button><button type="button" className="button button--ghost" onClick={giveUp}>Skip (no points)</button></div>
     </section>
   );
 }
