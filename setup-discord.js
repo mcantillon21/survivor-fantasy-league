@@ -97,11 +97,12 @@ client.once('ready', async () => {
       type: ChannelType.GuildText,
       parent: gameInfoCat.id,
       permissionOverwrites: [
-        { id: guild.id, deny: [PermissionFlagsBits.SendMessages] },
+        // Open so anyone can /register and chat before the game starts.
+        { id: guild.id, allow: [PermissionFlagsBits.SendMessages, PermissionFlagsBits.UseApplicationCommands] },
         { id: hostRole.id, allow: [PermissionFlagsBits.SendMessages] },
       ],
     });
-    console.log('  ✓ Created #announcements (read-only)');
+    console.log('  ✓ Created #announcements (open for registration)');
   }
 
   if (!guild.channels.cache.find(c => c.name === 'standings')) {
