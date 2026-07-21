@@ -10,6 +10,8 @@ import {
   handleTribal,
   handleFinalTribal,
   handleMerge,
+  handleSuggestName,
+  handleNamePoll,
   handleStandings,
   handleEndGame,
   startChallengeScheduler,
@@ -78,6 +80,17 @@ const commands = [
   {
     name: 'merge',
     description: 'Merge the tribes early (host only)',
+  },
+  {
+    name: 'suggestname',
+    description: 'Suggest a name for the merged tribe',
+    options: [
+      { name: 'name', type: 3, description: 'Your tribe name idea (2–24 characters)', required: true },
+    ],
+  },
+  {
+    name: 'namepoll',
+    description: 'Open the merged-tribe naming poll, then run again to pick the winner (host only)',
   },
   {
     name: 'newgame',
@@ -157,6 +170,10 @@ client.on('interactionCreate', async (interaction) => {
       await handleStandings(interaction);
     } else if (commandName === 'merge') {
       await handleMerge(interaction);
+    } else if (commandName === 'suggestname') {
+      await handleSuggestName(interaction);
+    } else if (commandName === 'namepoll') {
+      await handleNamePoll(interaction);
     } else if (commandName === 'endgame') {
       await handleEndGame(interaction);
     }
@@ -194,7 +211,10 @@ function findTaggedBots(content) {
 client.on('messageCreate', async (message) => {
   // Ignore the main bot's own messages but allow webhook messages through
   if (message.author.id === client.user.id) return;
-  if (!CHAT_CHANNELS.includes(message.channel.name)) return;
+  // Tribe rooms get renamed to their tribe name at /start (e.g. #tribe-taganong),
+  // so accept any #tribe-* channel in addition to the fixed list.
+  const chatChannel = CHAT_CHANNELS.includes(message.channel.name) || message.channel.name.startsWith('tribe-');
+  if (!chatChannel) return;
 
   // Check if this is a webhook bot message that tags another bot
   const isWebhook = message.webhookId != null;

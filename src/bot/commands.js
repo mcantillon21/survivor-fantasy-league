@@ -20,6 +20,20 @@ const ROLE = { player: 'Player', jury: 'Jury', spectator: 'Spectator', boot: 'Pr
 const findChannel = (guild, name) => guild?.channels?.cache.find((c) => c.name === name);
 const findRole = (guild, name) => guild?.roles?.cache.find((r) => r.name === name);
 
+// Discord channel names must be lowercase-kebab. Turn a tribe name into a slug.
+const slugify = (s) => (s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 90) || 'tribe';
+const tribeChannelName = (name) => `tribe-${slugify(name)}`;
+
+// Resolve a game channel by its stored id (rename-proof), falling back to the
+// original fixed name for games that started before ids were captured.
+// key is 'red' | 'blue' | 'camp'.
+function gameChannel(guild, state, key) {
+  const id = state?.tribe_channels?.[key];
+  if (id) { const byId = guild?.channels?.cache.get(id); if (byId) return byId; }
+  const name = key === 'red' ? CH.red : key === 'blue' ? CH.blue : key === 'camp' ? CH.camp : null;
+  return name ? findChannel(guild, name) : null;
+}
+
 async function post(guild, name, content) {
   const ch = findChannel(guild, name);
   if (!ch) return;
@@ -40,23 +54,23 @@ async function removeRole(guild, discordId, roleName) {
   if (!role) return;
   try { const m = await guild.members.fetch(discordId); if (m.roles.cache.has(role.id)) await m.roles.remove(role); } catch (e) { console.error(`removeRole ${roleName}:`, e.message); }
 }
-async function grantTribeChannel(guild, discordId, tribe) {
-  const ch = findChannel(guild, tribe === 'red' ? CH.red : CH.blue);
+async function grantTribeChannel(guild, state, discordId, tribe) {
+  const ch = gameChannel(guild, state, tribe);
   if (!ch) return;
   try { await ch.permissionOverwrites.edit(discordId, { ViewChannel: true, SendMessages: true }); } catch (e) { console.error('grantTribeChannel:', e.message); }
 }
-async function revokeTribeChannels(guild, discordId) {
-  for (const name of [CH.red, CH.blue]) {
-    const ch = findChannel(guild, name);
+async function revokeTribeChannels(guild, state, discordId) {
+  for (const key of ['red', 'blue']) {
+    const ch = gameChannel(guild, state, key);
     if (ch) await ch.permissionOverwrites.delete(discordId).catch(() => {});
   }
 }
-async function archiveTribeRooms(guild, players) {
-  if (!guild) return { ok: false, missing: [CH.red, CH.blue, CH.camp] };
-  const red = findChannel(guild, CH.red);
-  const blue = findChannel(guild, CH.blue);
-  const camp = findChannel(guild, CH.camp);
-  const missing = [[CH.red, red], [CH.blue, blue], [CH.camp, camp]]
+async function archiveTribeRooms(guild, state, players) {
+  if (!guild) return { ok: false, missing: ['tribe-red', 'tribe-blue', 'camp'] };
+  const red = gameChannel(guild, state, 'red');
+  const blue = gameChannel(guild, state, 'blue');
+  const camp = gameChannel(guild, state, 'camp');
+  const missing = [['tribe-red', red], ['tribe-blue', blue], ['camp', camp]]
     .filter(([, channel]) => !channel)
     .map(([name]) => name);
   if (missing.length) return { ok: false, missing };
@@ -94,9 +108,9 @@ async function syncDiscordProfiles(guild, players) {
   return synced;
 }
 // Eliminated: strip Player + tribe access; grant boot/spectator (pre-merge) or jury (post-merge).
-async function moveOut(guild, discordId, postMerge) {
+async function moveOut(guild, state, discordId, postMerge) {
   if (!guild) return;
-  await revokeTribeChannels(guild, discordId);
+  await revokeTribeChannels(guild, state, discordId);
   await removeRole(guild, discordId, ROLE.player);
   if (postMerge) {
     await addRole(guild, discordId, ROLE.jury);
@@ -188,9 +202,21 @@ export async function handleStart(interaction) {
 
   const guild = interaction.guild;
   if (guild) {
+    // Capture channel ids (so we can still find these rooms after renaming) and
+    // rename the two tribe rooms to the freshly generated tribe names.
+    let state = await getGameState(game.id);
+    if (!merged) {
+      const red = findChannel(guild, CH.red);
+      const blue = findChannel(guild, CH.blue);
+      const camp = findChannel(guild, CH.camp);
+      await updateGameState(game.id, { tribe_channels: { red: red?.id ?? null, blue: blue?.id ?? null, camp: camp?.id ?? null } });
+      state = await getGameState(game.id);
+      if (red && result.tribeNames?.[0]) await red.setName(tribeChannelName(result.tribeNames[0])).catch((e) => console.error('rename tribe red:', e.message));
+      if (blue && result.tribeNames?.[1]) await blue.setName(tribeChannelName(result.tribeNames[1])).catch((e) => console.error('rename tribe blue:', e.message));
+    }
     for (const p of alivePlayers(await getPlayers(game.id))) {
       await addRole(guild, p.discord_id, ROLE.player);
-      if (!merged) await grantTribeChannel(guild, p.discord_id, p.tribe);
+      if (!merged) await grantTribeChannel(guild, state, p.discord_id, p.tribe);
     }
     // Registration is closed — lock #announcements back to a read-only feed.
     const ann = findChannel(guild, CH.announcements);
@@ -389,7 +415,7 @@ async function resolveEliminationTribal(guild, gameId) {
     rockDraw ? { rockDraw: true, drawn: rockDraw.drawn, tied: rockDraw.tied } : {});
 
   await eliminatePlayer(gameId, result.eliminated, { juror: postMerge, placement: aliveBefore });
-  await moveOut(guild, result.eliminated, postMerge);
+  await moveOut(guild, state, result.eliminated, postMerge);
   await supabase.from('votes').delete().eq('game_id', gameId).eq('round', state.current_round).eq('vote_type', 'elimination');
   await supabase.from('players').update({ has_immunity: false }).eq('game_id', gameId).eq('is_eliminated', false);
 
@@ -400,7 +426,7 @@ async function resolveEliminationTribal(guild, gameId) {
     await updateGameState(gameId, { phase: 'final', finalist_pool: finalists, current_round: state.current_round + 1, active_challenge: null });
     transition = `\n\n🔥 **FINAL 3: ${finalists.map((id) => playerMap.get(id)).join(', ')}.** Host: run \`/finaltribal\`.`;
   } else if (state.phase === 'tribe' && aliveAfter <= state.merge_at) {
-    const archive = await archiveTribeRooms(guild, players);
+    const archive = await archiveTribeRooms(guild, state, players);
     if (!archive.ok) console.error(`Merge could not archive channels: ${archive.missing.join(', ')}`);
     await mergeGameState(gameId);
     await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null });
@@ -408,6 +434,7 @@ async function resolveEliminationTribal(guild, gameId) {
     await post(guild, CH.announcements, `🏝️ **THE MERGE!** ${aliveAfter} players remain. It is now every player for themselves.`);
     await postGif(guild, CH.announcements, 'merge'); // "Everybody drop your buffs."
     await post(guild, CH.camp, `🏝️ **WELCOME TO THE MERGED CAMP.** ${aliveAfter} players remain. Tribe rooms are now read-only.`);
+    await openMergeNaming(guild, gameId); // players suggest a merged-tribe name
   } else {
     await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null });
   }
@@ -517,7 +544,7 @@ export async function handleMerge(interaction) {
   const state = await getGameState(game.id);
   if (state.phase !== 'tribe') { await interaction.editReply('The tribes are not in a state to merge right now.'); return; }
   const players = await getPlayers(game.id);
-  const archive = await archiveTribeRooms(interaction.guild, players);
+  const archive = await archiveTribeRooms(interaction.guild, state, players);
   if (!archive.ok) {
     await interaction.editReply(`Merge stopped: missing #${archive.missing.join(', #')}. No game state was changed.`);
     return;
@@ -527,7 +554,125 @@ export async function handleMerge(interaction) {
   await post(interaction.guild, CH.announcements, '🏝️ **THE TRIBES HAVE MERGED!** Every player for themselves. Immunity is individual.');
   await postGif(interaction.guild, CH.announcements, 'merge'); // "Everybody drop your buffs."
   await post(interaction.guild, CH.camp, '🏝️ **WELCOME TO THE MERGED CAMP.** Tribe rooms are now read-only. The game is individual.');
-  await interaction.editReply('Merge complete — tribe rooms are read-only and the game is now in #camp.');
+  await openMergeNaming(interaction.guild, game.id); // players suggest a merged-tribe name
+  await interaction.editReply('Merge complete — tribe rooms are read-only and the game is now in #camp. Players can `/suggestname`, then run `/namepoll`.');
+}
+
+// ---------------------------------------------------------------------------
+// Merged-tribe naming: /suggestname (players) → /namepoll (host opens the vote,
+// then runs it again to close the poll and rename the merged camp channel).
+// ---------------------------------------------------------------------------
+async function openMergeNaming(guild, gameId) {
+  // Clear any leftover suggestions/poll from a previous merge, then invite names.
+  await supabase.from('merge_suggestions').delete().eq('game_id', gameId);
+  await updateGameState(gameId, { merged_tribe_name: null, merge_poll_message_id: null });
+  await post(guild, CH.camp,
+    '🏕️ **NAME YOUR NEW TRIBE!**\nEveryone still in the game: suggest a name with `/suggestname <name>`.\nWhen suggestions are in, the host opens the vote with `/namepoll`.');
+}
+
+export async function handleSuggestName(interaction) {
+  const game = await requireGame(interaction, { live: true });
+  if (!game) return;
+  const state = await getGameState(game.id);
+  if (state.phase !== 'individual') { await interaction.reply({ content: 'Tribe-name suggestions open after the merge.', ephemeral: true }); return; }
+  if (state.merged_tribe_name) { await interaction.reply({ content: `The merged tribe is already named **${state.merged_tribe_name}**.`, ephemeral: true }); return; }
+  if (state.merge_poll_message_id) { await interaction.reply({ content: 'The naming poll is already open — vote on the poll in #camp instead.', ephemeral: true }); return; }
+
+  const { data: player } = await supabase.from('players').select('*').eq('game_id', game.id).eq('discord_id', interaction.user.id).maybeSingle();
+  if (!player || player.is_eliminated) { await interaction.reply({ content: 'Only players still in the game can suggest a name.', ephemeral: true }); return; }
+
+  const name = (interaction.options.getString('name') || '').replace(/[@`\n\r]/g, '').replace(/\s+/g, ' ').trim();
+  if (name.length < 2 || name.length > 24) { await interaction.reply({ content: 'Keep the name between 2 and 24 characters.', ephemeral: true }); return; }
+
+  const { error } = await supabase.from('merge_suggestions')
+    .upsert({ game_id: game.id, discord_id: interaction.user.id, name }, { onConflict: 'game_id,discord_id' });
+  if (error) throw error;
+  await interaction.reply({ content: `📝 Your suggestion **${name}** is in. (You can run \`/suggestname\` again to change it until the host opens the poll.)`, ephemeral: true });
+}
+
+export async function handleNamePoll(interaction) {
+  if (!(await hostOnly(interaction))) return;
+  await interaction.deferReply();
+  const game = await getCurrentGame(interaction.guildId);
+  if (!game) { await interaction.editReply('No active season.'); return; }
+  const state = await getGameState(game.id);
+  if (state.phase !== 'individual') { await interaction.editReply('The naming vote runs after the merge.'); return; }
+  if (state.merged_tribe_name) { await interaction.editReply(`The merged tribe is already named **${state.merged_tribe_name}**.`); return; }
+
+  const camp = gameChannel(interaction.guild, state, 'camp');
+  if (!camp) { await interaction.editReply('Could not find the merged camp channel.'); return; }
+
+  // Second run: a poll is open — close it, pick the winner, rename camp, lock tribes.
+  if (state.merge_poll_message_id) {
+    let pollMsg = null;
+    try { pollMsg = await camp.messages.fetch(state.merge_poll_message_id); } catch { /* deleted */ }
+    if (!pollMsg?.poll) {
+      await updateGameState(game.id, { merge_poll_message_id: null });
+      await interaction.editReply('The poll message is gone. Run `/namepoll` again to start a fresh vote.');
+      return;
+    }
+    try { if (!pollMsg.poll.resultsFinalized) await pollMsg.poll.end(); } catch { /* already ended */ }
+    try { pollMsg = await camp.messages.fetch(state.merge_poll_message_id); } catch { /* keep the copy we have */ }
+
+    const answers = [...pollMsg.poll.answers.values()];
+    const topVotes = answers.reduce((max, a) => Math.max(max, a.voteCount), 0);
+    const leaders = answers.filter((a) => a.voteCount === topVotes);
+    const winner = leaders[Math.floor(Math.random() * leaders.length)];
+    const winnerName = winner?.text || 'The Merged Tribe';
+
+    await camp.setName(slugify(winnerName)).catch((e) => console.error('rename camp:', e.message));
+    await updateGameState(game.id, { merged_tribe_name: winnerName, merge_poll_message_id: null });
+
+    // Everyone still in stays in camp; the pre-merge tribe rooms go dark.
+    const players = await getPlayers(game.id);
+    for (const p of alivePlayers(players)) {
+      await camp.permissionOverwrites.edit(p.discord_id, { ViewChannel: true, SendMessages: true }).catch(() => {});
+      for (const key of ['red', 'blue']) {
+        const ch = gameChannel(interaction.guild, state, key);
+        if (ch) await ch.permissionOverwrites.edit(p.discord_id, { ViewChannel: false, SendMessages: false }).catch(() => {});
+      }
+    }
+
+    const tally = answers.sort((a, b) => b.voteCount - a.voteCount)
+      .map((a) => `• ${a.text}: ${a.voteCount} vote${a.voteCount === 1 ? '' : 's'}${a === winner ? ' 👑' : ''}`).join('\n');
+    await camp.send(`🔥 **THE TRIBE HAS SPOKEN — YOU HAVE A NAME.**\n\nYou are now the **${winnerName}**.\n\n${tally}\n\nYour old tribe rooms are closed.`).catch(() => {});
+    await post(interaction.guild, CH.announcements, `🏝️ The merged tribe is now the **${winnerName}**!`);
+    await interaction.editReply(`Named the merged tribe **${winnerName}**, renamed the camp channel, and closed the old tribe rooms.`);
+    return;
+  }
+
+  // First run: build the poll from the collected suggestions.
+  const { data: rows } = await supabase.from('merge_suggestions').select('name').eq('game_id', game.id);
+  const seen = new Set();
+  const options = [];
+  for (const row of rows || []) {
+    const clean = (row.name || '').trim().slice(0, 55);
+    const key = clean.toLowerCase();
+    if (clean && !seen.has(key)) { seen.add(key); options.push(clean); }
+    if (options.length >= 10) break; // Discord polls allow at most 10 answers
+  }
+  if (options.length < 2) {
+    await interaction.editReply(`Need at least 2 different suggestions to open a poll (there ${options.length === 1 ? 'is 1' : `are ${options.length}`}). Ask players to \`/suggestname\` first.`);
+    return;
+  }
+
+  let pollMsg;
+  try {
+    pollMsg = await camp.send({
+      poll: {
+        question: { text: 'What should the merged tribe be called?' },
+        answers: options.map((text) => ({ text })),
+        duration: 24, // hours; the host closes it early by re-running /namepoll
+        allowMultiselect: false,
+      },
+    });
+  } catch (e) {
+    console.error('create merge poll:', e.message);
+    await interaction.editReply('Could not create the poll (the bot may be missing the "Create Polls" permission in that channel).');
+    return;
+  }
+  await updateGameState(game.id, { merge_poll_message_id: pollMsg.id });
+  await interaction.editReply(`📊 Naming poll posted in #${camp.name} with ${options.length} option${options.length === 1 ? '' : 's'}. When voting's done, run \`/namepoll\` again to lock in the winner.`);
 }
 
 // ---------------------------------------------------------------------------
