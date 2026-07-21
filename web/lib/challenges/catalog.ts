@@ -202,12 +202,12 @@ export const CHALLENGES: ChallengeDefinition[] = [
     name: 'Puzzle Rush',
     number: '16',
     tagline: 'Five minutes. As many mates as you can.',
-    description: 'A chess.com Puzzle Rush–style sprint: solve as many mate-in-1 puzzles as you can before the clock runs out.',
+    description: 'A chess.com Puzzle Rush–style sprint: mate-in-1, then mate-in-2, then mate-in-3 puzzles ramp up in difficulty. Solve as many as you can before the clock runs out.',
     category: 'Puzzle',
     difficulty: 'Hard',
     duration: '5 min',
     speedWeight: 0,
-    rules: ['Click a piece, then its target square.', 'Each puzzle is mate in one move.', 'Solve as many as you can in 5 minutes.'],
+    rules: ['Click a piece, then its target square.', 'Puzzles ramp up: mate-in-1 → mate-in-2 → mate-in-3.', 'On longer mates the engine answers with its best defence.', 'Harder mates are worth more; solve as many as you can in 5 minutes.'],
   },
 ];
 
