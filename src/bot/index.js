@@ -9,6 +9,7 @@ import {
   handleVote,
   handleTribal,
   handleFinalTribal,
+  handleRevealVotes,
   handleMerge,
   handleStandings,
   handleEndGame,
@@ -69,7 +70,11 @@ const commands = [
   },
   {
     name: 'finaltribal',
-    description: 'Final three face the jury (host only)',
+    description: 'Open the final tribal council — the jury votes (host only)',
+  },
+  {
+    name: 'revealvotes',
+    description: 'Read the jury vote and crown the winner (host only)',
   },
   {
     name: 'standings',
@@ -153,6 +158,8 @@ client.on('interactionCreate', async (interaction) => {
       await handleTribal(interaction);
     } else if (commandName === 'finaltribal') {
       await handleFinalTribal(interaction);
+    } else if (commandName === 'revealvotes') {
+      await handleRevealVotes(interaction);
     } else if (commandName === 'standings') {
       await handleStandings(interaction);
     } else if (commandName === 'merge') {
