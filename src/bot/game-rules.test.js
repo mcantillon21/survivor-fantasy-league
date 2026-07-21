@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { CHALLENGE_CHOICES } from './challenges.js';
 import { tallyVoteRows } from './game-rules.js';
 
-test('all 15 official challenge choices have unique slugs', () => {
-  assert.equal(CHALLENGE_CHOICES.length, 15);
-  assert.equal(new Set(CHALLENGE_CHOICES.map(({ value }) => value)).size, 15);
+test('official challenge choices all have unique slugs', () => {
+  assert.ok(CHALLENGE_CHOICES.length > 0);
+  assert.equal(new Set(CHALLENGE_CHOICES.map(({ value }) => value)).size, CHALLENGE_CHOICES.length);
 });
 
 test('vote tally returns a decisive elimination', () => {

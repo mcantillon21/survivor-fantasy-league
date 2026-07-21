@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { supabase } from './games.js';
 import { tallyVoteRows } from './game-rules.js';
+import { generateTribePair, tribeLabel } from './tribe-names.js';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY || 'disabled' });
 const NARRATION_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
@@ -81,26 +82,30 @@ export async function startGame(gameId, { minPlayers = 6, requireEven = false, m
     return { count: players.length, merged: true, rosters: { everyone: shuffle(players).map((p) => p.username) } };
   }
 
-  const [tribeA, tribeB] = state?.tribe_names || ['red', 'blue'];
+  // Tribes are keyed internally by 'red'/'blue' (channels, permissions); the
+  // fun mashup names are display-only and stored in game_state.tribe_names.
+  const KEYS = ['red', 'blue'];
+  const tribeNames = generateTribePair();
   const shuffled = shuffle(players);
   const half = Math.ceil(shuffled.length / 2);
   const mergeAt = Math.min(state?.merge_at || 12, Math.max(5, Math.floor(players.length * 2 / 3)));
 
   for (let i = 0; i < shuffled.length; i++) {
     await supabase.from('players').update({
-      tribe: i < half ? tribeA : tribeB,
+      tribe: i < half ? KEYS[0] : KEYS[1],
       is_eliminated: false, has_immunity: false, is_juror: false, placement: null,
     }).eq('id', shuffled[i].id);
   }
 
-  await updateGameState(gameId, { phase: 'tribe', current_round: 1, merge_at: mergeAt, active_challenge: null, finalist_pool: null, winner_discord_id: null });
+  await updateGameState(gameId, { phase: 'tribe', current_round: 1, merge_at: mergeAt, active_challenge: null, finalist_pool: null, winner_discord_id: null, tribe_names: tribeNames });
 
   return {
     count: shuffled.length,
     mergeAt,
+    tribeNames,
     rosters: {
-      [tribeA]: shuffled.slice(0, half).map((p) => p.username),
-      [tribeB]: shuffled.slice(half).map((p) => p.username),
+      [KEYS[0]]: shuffled.slice(0, half).map((p) => p.username),
+      [KEYS[1]]: shuffled.slice(half).map((p) => p.username),
     },
   };
 }
@@ -137,7 +142,7 @@ export async function resolveImmunity(gameId) {
     if (!ranked.length) return { empty: true };
     const winningTribe = ranked[0][0];
     await supabase.from('players').update({ has_immunity: true }).eq('game_id', gameId).eq('tribe', winningTribe).eq('is_eliminated', false);
-    return { phase: 'tribe', tribeTotals: ranked, winningTribe };
+    return { phase: 'tribe', tribeTotals: ranked, winningTribe, tribeNames: state.tribe_names };
   }
 
   const ranked = [...scores].sort((a, b) => b.score - a.score);
@@ -149,7 +154,7 @@ export async function resolveImmunity(gameId) {
 export async function narrateChallengeResults(summary) {
   let board;
   if (summary.phase === 'tribe') {
-    board = summary.tribeTotals.map(([t, n], i) => `${i + 1}. ${t} tribe: ${n} points`).join('\n');
+    board = summary.tribeTotals.map(([t, n], i) => `${i + 1}. ${tribeLabel(t, summary.tribeNames)}: ${n} points`).join('\n');
   } else {
     board = summary.ranked.map((r, i) => `${i + 1}. ${r.player_id}: ${r.score} points`).join('\n');
   }
@@ -157,7 +162,7 @@ export async function narrateChallengeResults(summary) {
     ? 'Two tribes just competed in a team immunity challenge. The winning tribe is safe; the losing tribe goes to Tribal Council.'
     : 'Players competed in an individual immunity challenge. Only the winner is safe.';
   const prompt = `You are Jeff Probst hosting Survivor. ${context}\n\nScores:\n${board}\n\nWrite a dramatic 2-3 sentence narration announcing who won immunity and who is vulnerable. Theatrical but concise.`;
-  const winner = summary.phase === 'tribe' ? `Tribe ${summary.winningTribe}` : summary.winner;
+  const winner = summary.phase === 'tribe' ? tribeLabel(summary.winningTribe, summary.tribeNames) : summary.winner;
   return narration(prompt, `${winner} wins immunity. Everyone else is vulnerable tonight.`, 200);
 }
 

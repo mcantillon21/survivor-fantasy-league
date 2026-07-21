@@ -5,6 +5,8 @@ import {
   narrateTribalCouncil, tallyJury, crownWinner, narrateWinner,
 } from './referee.js';
 import { CHALLENGE_CHOICES, getChallengeName } from './challenges.js';
+import { GIFS } from './gifs.js';
+import { tribeLabel } from './tribe-names.js';
 
 const CHALLENGE_BASE = 'https://survivor-fantasy-league-pi.vercel.app/game';
 
@@ -22,6 +24,11 @@ async function post(guild, name, content) {
   const ch = findChannel(guild, name);
   if (!ch) return;
   try { await ch.send(content); } catch (e) { console.error(`post #${name}:`, e.message); }
+}
+// Post a Jeff Probst reaction GIF (its own message so Discord embeds the Tenor
+// link). No-ops if that beat's GIF is unset. See gifs.js.
+async function postGif(guild, name, key) {
+  if (GIFS[key]) await post(guild, name, GIFS[key]);
 }
 async function addRole(guild, discordId, roleName) {
   const role = findRole(guild, roleName);
@@ -203,7 +210,7 @@ export async function handleStart(interaction) {
     msg = `🌴 **THE GAME BEGINS** — ${result.count} castaways, two tribes.\n\n`;
     for (const [tribe, members] of Object.entries(result.rosters)) {
       const emoji = tribe === 'red' ? '🔴' : tribe === 'blue' ? '🔵' : '•';
-      msg += `${emoji} **Tribe ${tribe} (${members.length})**\n${members.map((m) => `• ${m}`).join('\n')}\n\n`;
+      msg += `${emoji} **${tribeLabel(tribe, result.tribeNames)} (${members.length})**\n${members.map((m) => `• ${m}`).join('\n')}\n\n`;
     }
     if (test) msg += `⚠️ **Test mode** — started with a reduced roster of ${result.count}.\n\n`;
     msg += `Each tribe only sees its own channel. The host will post the first immunity challenge — merge at ${result.mergeAt}.`;
@@ -245,6 +252,7 @@ export async function handleChallenge(interaction) {
 
   await post(interaction.guild, CH.lobby,
     `🔥 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\nYou have 10 minutes.`);
+  await postGif(interaction.guild, CH.lobby, 'immunity'); // "Immunity is back up for grabs."
   await interaction.reply({ content: `${getChallengeName(slug)} posted to #${CH.lobby}.`, ephemeral: true });
 }
 
@@ -265,16 +273,20 @@ export async function handleResults(interaction) {
   const state = await getGameState(game.id);
 
   if (summary.phase === 'tribe') {
-    const winning = summary.winningTribe;
-    const losing = (state.tribe_names || ['red', 'blue']).find((t) => t !== winning) || 'the other';
+    const winning = summary.winningTribe;                       // internal key: 'red' | 'blue'
+    const losingKey = winning === 'red' ? 'blue' : 'red';
+    const winLabel = tribeLabel(winning, state.tribe_names);
+    const loseLabel = tribeLabel(losingKey, state.tribe_names);
     msg += '**Tribe scores:**\n';
-    summary.tribeTotals.forEach(([t, n], i) => { msg += `${i === 0 ? '🥇' : '•'} ${t}: ${n} points${t === winning ? ' 🛡️ IMMUNE' : ' — Tribal Council'}\n`; });
-    await post(interaction.guild, CH.lobby, `🏆 **Tribe ${winning}** wins immunity!\n**Tribe ${losing}** has the fewest points and is going to Tribal Council. Head to #${CH.tribal} and \`/vote\` — own tribe only, votes stay secret.`);
+    summary.tribeTotals.forEach(([t, n], i) => { msg += `${i === 0 ? '🥇' : '•'} ${tribeLabel(t, state.tribe_names)}: ${n} points${t === winning ? ' 🛡️ IMMUNE' : ' — Tribal Council'}\n`; });
+    await post(interaction.guild, CH.lobby, `🏆 **${winLabel}** wins immunity!\n**${loseLabel}** has the fewest points and is going to Tribal Council. Head to #${CH.tribal} and \`/vote\` — own tribe only, votes stay secret.`);
   } else {
     msg += '**Scores:**\n';
     summary.ranked.forEach((r, i) => { msg += `${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '•'} ${r.player_id}: ${r.score} points${i === 0 ? ' 🛡️ IMMUNE' : ''}\n`; });
     await post(interaction.guild, CH.lobby, `🛡️ **${summary.winner}** wins individual immunity! Everyone else — #${CH.tribal} and \`/vote\`. You cannot vote for ${summary.winner}.`);
   }
+  await post(interaction.guild, CH.tribal, '⚖️ **Tribal Council is now in session.** Cast your `/vote`.');
+  await postGif(interaction.guild, CH.tribal, 'tribalStart'); // "Well, let's get into it."
   await interaction.editReply(msg);
 }
 
@@ -394,6 +406,7 @@ async function resolveEliminationTribal(guild, gameId) {
     await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null });
     transition = `\n\n🏝️ **THE MERGE!** ${aliveAfter} players remain — individual game from here.`;
     await post(guild, CH.announcements, `🏝️ **THE MERGE!** ${aliveAfter} players remain. It is now every player for themselves.`);
+    await postGif(guild, CH.announcements, 'merge'); // "Everybody drop your buffs."
     await post(guild, CH.camp, `🏝️ **WELCOME TO THE MERGED CAMP.** ${aliveAfter} players remain. Tribe rooms are now read-only.`);
   } else {
     await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null });
@@ -409,6 +422,7 @@ async function resolveEliminationTribal(guild, gameId) {
   if (rockDraw) msg += `\n🟣 **${name} drew the purple rock and is out of the game.**`;
   msg += `\n**${name}, the tribe has spoken. 🔦**${postMerge ? ' You are now on the **Jury**.' : ' You are now a **Pre-merge boot**.'}${transition}`;
   await post(guild, CH.tribal, msg);
+  await postGif(guild, CH.tribal, 'voteReveal'); // "The tribe has spoken."
   return { ok: true, msg };
 }
 
@@ -511,6 +525,7 @@ export async function handleMerge(interaction) {
   await mergeGameState(game.id);
   await updateGameState(game.id, { active_challenge: null });
   await post(interaction.guild, CH.announcements, '🏝️ **THE TRIBES HAVE MERGED!** Every player for themselves. Immunity is individual.');
+  await postGif(interaction.guild, CH.announcements, 'merge'); // "Everybody drop your buffs."
   await post(interaction.guild, CH.camp, '🏝️ **WELCOME TO THE MERGED CAMP.** Tribe rooms are now read-only. The game is individual.');
   await interaction.editReply('Merge complete — tribe rooms are read-only and the game is now in #camp.');
 }
@@ -562,7 +577,7 @@ export async function handleStandings(interaction) {
   if (state?.phase === 'tribe') {
     const byTribe = {};
     alive.forEach((p) => { (byTribe[p.tribe || 'unassigned'] ||= []).push(p); });
-    for (const [tribe, members] of Object.entries(byTribe)) { msg += `\n__Tribe ${tribe}__\n`; members.forEach((p) => { msg += `• ${p.username}${p.has_immunity ? ' 🛡️' : ''}\n`; }); }
+    for (const [tribe, members] of Object.entries(byTribe)) { msg += `\n__${tribeLabel(tribe, state.tribe_names)}__\n`; members.forEach((p) => { msg += `• ${p.username}${p.has_immunity ? ' 🛡️' : ''}\n`; }); }
   } else {
     alive.forEach((p) => { msg += `• ${p.username}${p.has_immunity ? ' 🛡️' : ''}\n`; });
   }
