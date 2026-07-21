@@ -436,7 +436,7 @@ export async function handleTribal(interaction) {
 }
 
 // ---------------------------------------------------------------------------
-// /finaltribal — (host) the final three face the jury
+// /finaltribal — (host) open the final tribal council; the jury votes for a winner
 // ---------------------------------------------------------------------------
 export async function handleFinalTribal(interaction) {
   if (!(await hostOnly(interaction))) return;
@@ -447,15 +447,30 @@ export async function handleFinalTribal(interaction) {
   if (state.phase !== 'final') { await interaction.editReply('It is not the final tribal yet — play down to three players first.'); return; }
 
   const players = await getPlayers(game.id);
+  const finalists = alivePlayers(players);
+  await updateGameState(game.id, { finalist_pool: finalists.map((p) => p.discord_id) });
+  await post(interaction.guild, CH.tribal,
+    `⚖️ **FINAL TRIBAL COUNCIL**\n\nThe jury may now speak. Jurors — \`/vote\` for who should WIN.\nFinalists: **${finalists.map((p) => p.username).join(', ')}** (finalists cannot vote).\n\nWhen every juror has voted, the host runs \`/revealvotes\` to read the votes.`);
+  await interaction.editReply('Final Tribal opened — jurors can vote now. Run `/revealvotes` to read the votes.');
+}
+
+// ---------------------------------------------------------------------------
+// /revealvotes — (host) read the jury vote and crown the Sole Survivor
+// ---------------------------------------------------------------------------
+export async function handleRevealVotes(interaction) {
+  if (!(await hostOnly(interaction))) return;
+  await interaction.deferReply();
+  const game = await getCurrentGame(interaction.guildId);
+  if (!game) { await interaction.editReply('No active season.'); return; }
+  const state = await getGameState(game.id);
+  if (state.phase !== 'final') { await interaction.editReply('There is no final vote to reveal — open the final tribal with `/finaltribal` at the final three first.'); return; }
+
+  const players = await getPlayers(game.id);
   const playerMap = new Map(players.map((p) => [p.discord_id, p.username]));
   const result = await tallyJury(game.id, state.current_round);
 
   if (!result) {
-    const finalists = alivePlayers(players);
-    await updateGameState(game.id, { finalist_pool: finalists.map((p) => p.discord_id) });
-    await post(interaction.guild, CH.tribal,
-      `⚖️ **FINAL TRIBAL COUNCIL**\n\nThe jury may now speak. Jurors — \`/vote\` for who should WIN.\nFinalists: **${finalists.map((p) => p.username).join(', ')}** (finalists cannot vote).\n\nWhen every juror has voted, the host runs \`/finaltribal\` again to read the votes.`);
-    await interaction.editReply('Final Tribal opened — jurors can vote now. Run `/finaltribal` again to read the votes.');
+    await interaction.editReply('No jury votes have been cast yet. Open the final tribal with `/finaltribal`, then wait for jurors to `/vote`.');
     return;
   }
 
@@ -471,7 +486,7 @@ export async function handleFinalTribal(interaction) {
     await supabase.from('votes').delete().eq('game_id', game.id).eq('round', state.current_round).eq('vote_type', 'jury');
     const names = result.tied.map((id) => playerMap.get(id) || 'Unknown').join(' vs ');
     await post(interaction.guild, CH.tribal, `⚖️ **THE JURY IS DEADLOCKED.** Revote between **${names}** — jurors, \`/vote\` again.`);
-    await interaction.editReply(`Tie — revote between ${names}, then run \`/finaltribal\`.`);
+    await interaction.editReply(`Tie — revote between ${names}, then run \`/revealvotes\` again.`);
     return;
   }
 
