@@ -581,6 +581,15 @@ async function openMergeNaming(guild, gameId) {
   // Clear any leftover suggestions/poll from a previous merge, then invite names.
   await supabase.from('merge_suggestions').delete().eq('game_id', gameId);
   await updateGameState(gameId, { merged_tribe_name: null, merge_poll_message_id: null });
+  // Open the merged camp so the remaining players can actually chat there (the
+  // camp channel may deny @everyone by default). Per-player overwrites win.
+  const state = await getGameState(gameId);
+  const camp = gameChannel(guild, state, 'camp');
+  if (camp) {
+    for (const p of alivePlayers(await getPlayers(gameId))) {
+      await camp.permissionOverwrites.edit(p.discord_id, { ViewChannel: true, SendMessages: true }).catch((e) => console.error('open camp:', e.message));
+    }
+  }
   await post(guild, CH.camp,
     '🏕️ **NAME YOUR NEW TRIBE!**\nEveryone still in the game: suggest a name with `/suggestname <name>`.\nWhen suggestions are in, the host opens the vote with `/namepoll`.');
 }
