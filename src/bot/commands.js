@@ -119,6 +119,39 @@ async function moveOut(guild, state, discordId, postMerge) {
     await addRole(guild, discordId, ROLE.spectator);
   }
 }
+// The text channels a season uses; purged when a new season is created.
+const GAME_TEXT_CHANNELS = [CH.announcements, CH.camp, CH.lobby, CH.tribal, CH.red, CH.blue, CH.spectators, CH.ponderosa];
+
+// On a new season: reset any channels the previous season renamed (the tribe
+// rooms, and the merged camp) back to their canonical names, then clear old
+// messages so the new game starts on a clean slate. `prevState` is the previous
+// game's game_state (for the stored channel ids). bulkDelete can only remove
+// messages younger than 14 days — older ones are left behind by Discord.
+async function resetAndPurgeChannels(guild, prevState) {
+  if (!guild) return;
+  // 1) Rename renamed tribe/camp channels back to canonical (by stored id).
+  for (const [key, canonical] of [['red', CH.red], ['blue', CH.blue], ['camp', CH.camp]]) {
+    const id = prevState?.tribe_channels?.[key];
+    const ch = id ? guild.channels.cache.get(id) : null;
+    if (ch && ch.name !== canonical) await ch.setName(canonical).catch((e) => console.error(`reset #${canonical}:`, e.message));
+  }
+  // 2) Gather channels to purge: the canonical set, the prev camp by id, and any
+  //    leftover #tribe-* rooms (in case a reset above did not apply).
+  const targets = new Map();
+  for (const name of GAME_TEXT_CHANNELS) { const c = findChannel(guild, name); if (c) targets.set(c.id, c); }
+  const campId = prevState?.tribe_channels?.camp;
+  if (campId && guild.channels.cache.has(campId)) targets.set(campId, guild.channels.cache.get(campId));
+  for (const c of guild.channels.cache.values()) { if (c?.name?.startsWith('tribe-')) targets.set(c.id, c); }
+  // 3) Purge each channel (loop because bulkDelete clears at most 100 at a time).
+  for (const ch of targets.values()) {
+    if (typeof ch.bulkDelete !== 'function') continue;
+    try {
+      let removed; let guard = 0;
+      do { removed = await ch.bulkDelete(100, true); guard++; } while (removed.size >= 2 && guard < 20);
+    } catch (e) { console.error(`purge #${ch.name}:`, e.message); }
+  }
+}
+
 async function hostOnly(interaction) {
   if (userCanManageGame(interaction)) return true;
   await interaction.reply({ content: 'Only a host (Manage Server) can run that.', ephemeral: true });
@@ -134,6 +167,11 @@ export async function handleNewGame(interaction) {
 
   const existing = await getCurrentGame(interaction.guildId);
   if (existing) { await interaction.editReply(`A season already exists (**${existing.name}**, \`${existing.code}\`). End it with \`/endgame\` first.`); return; }
+
+  // Clean slate: reset renamed channels and clear the previous season's messages.
+  const previous = await getCurrentGame(interaction.guildId, { includeEnded: true });
+  const previousState = previous ? await getGameState(previous.id) : null;
+  await resetAndPurgeChannels(interaction.guild, previousState);
 
   const code = normalizeGameCode(interaction.options.getString('code'));
   const name = interaction.options.getString('name');
