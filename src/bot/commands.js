@@ -163,7 +163,9 @@ async function hostOnly(interaction) {
 // ---------------------------------------------------------------------------
 export async function handleNewGame(interaction) {
   if (!(await hostOnly(interaction))) return;
-  await interaction.deferReply();
+  // Ephemeral so the confirmation is NOT a real channel message — otherwise the
+  // channel purge below would delete this very reply and the edit would fail.
+  await interaction.deferReply({ ephemeral: true });
 
   const existing = await getCurrentGame(interaction.guildId);
   if (existing) { await interaction.editReply(`A season already exists (**${existing.name}**, \`${existing.code}\`). End it with \`/endgame\` first.`); return; }
@@ -191,7 +193,12 @@ export async function handleNewGame(interaction) {
     if (ann) await ann.permissionOverwrites.edit(guild.id, { SendMessages: true, UseApplicationCommands: true }).catch((e) => console.error('open announcements:', e.message));
   }
 
-  await interaction.editReply(`🌱 Season **${name}** created (\`${code}\`). Players use \`/register\` in #announcements, then the host runs \`/start\`.`);
+  // Durable, public sign-up prompt — posted AFTER the purge so it survives, and
+  // as a real message (not the ephemeral reply) so every player can see it.
+  await post(guild, CH.announcements,
+    `🌱 **A NEW SEASON HAS BEGUN — ${name.toUpperCase()}** (\`${code}\`)\n\nPlayers: use \`/register\` right here to join. When everyone's in, the host runs \`/start\` to form the tribes.`);
+
+  await interaction.editReply(`🌱 Season **${name}** created (\`${code}\`). The sign-up prompt is posted in #${CH.announcements}. Players \`/register\`, then run \`/start\`.`);
 }
 
 // ---------------------------------------------------------------------------
