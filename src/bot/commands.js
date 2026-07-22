@@ -55,9 +55,17 @@ async function removeRole(guild, discordId, roleName) {
   try { const m = await guild.members.fetch(discordId); if (m.roles.cache.has(role.id)) await m.roles.remove(role); } catch (e) { console.error(`removeRole ${roleName}:`, e.message); }
 }
 async function grantTribeChannel(guild, state, discordId, tribe) {
-  const ch = gameChannel(guild, state, tribe);
-  if (!ch) return;
-  try { await ch.permissionOverwrites.edit(discordId, { ViewChannel: true, SendMessages: true }); } catch (e) { console.error('grantTribeChannel:', e.message); }
+  // Allow the player's own tribe room, and explicitly deny the other tribe's
+  // room so pre-merge players can only ever see their own camp.
+  const own = gameChannel(guild, state, tribe);
+  if (own) {
+    try { await own.permissionOverwrites.edit(discordId, { ViewChannel: true, SendMessages: true }); } catch (e) { console.error('grantTribeChannel:', e.message); }
+  }
+  const otherKey = tribe === 'red' ? 'blue' : 'red';
+  const other = gameChannel(guild, state, otherKey);
+  if (other) {
+    try { await other.permissionOverwrites.edit(discordId, { ViewChannel: false, SendMessages: false }); } catch (e) { console.error('denyTribeChannel:', e.message); }
+  }
 }
 async function revokeTribeChannels(guild, state, discordId) {
   for (const key of ['red', 'blue']) {
@@ -227,7 +235,9 @@ export async function handleRegister(interaction) {
 // ---------------------------------------------------------------------------
 export async function handleStart(interaction) {
   if (!(await hostOnly(interaction))) return;
-  await interaction.deferReply();
+  // Ephemeral: the roster is posted publicly to #announcements below — a public
+  // reply would duplicate it when /start is run in that same channel.
+  await interaction.deferReply({ ephemeral: true });
   const game = await getCurrentGame(interaction.guildId);
   if (!game) { await interaction.editReply('No season exists. Create one with `/newgame` first.'); return; }
 
@@ -287,7 +297,7 @@ export async function handleStart(interaction) {
     msg += `Each tribe only sees its own channel. The host will post the first immunity challenge — merge at ${result.mergeAt}.`;
   }
   await post(guild, CH.announcements, msg);
-  await interaction.editReply(msg);
+  await interaction.editReply(`🌴 Season started — the roster is posted in #${CH.announcements}.`);
 }
 
 // ---------------------------------------------------------------------------
