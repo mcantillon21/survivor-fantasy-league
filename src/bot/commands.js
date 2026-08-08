@@ -134,7 +134,8 @@ const GAME_TEXT_CHANNELS = [CH.announcements, CH.camp, CH.lobby, CH.tribal, CH.r
 // rooms, and the merged camp) back to their canonical names, then clear old
 // messages so the new game starts on a clean slate. `prevState` is the previous
 // game's game_state (for the stored channel ids). bulkDelete can only remove
-// messages younger than 14 days — older ones are left behind by Discord.
+// messages younger than 14 days, so anything older is swept one-by-one after
+// (slower — Discord rate-limits single deletes — but nothing gets left behind).
 async function resetAndPurgeChannels(guild, prevState) {
   if (!guild) return;
   // 1) Rename renamed tribe/camp channels back to canonical (by stored id).
@@ -156,6 +157,14 @@ async function resetAndPurgeChannels(guild, prevState) {
     try {
       let removed; let guard = 0;
       do { removed = await ch.bulkDelete(100, true); guard++; } while (removed.size >= 2 && guard < 20);
+      // Sweep what bulkDelete cannot touch (messages older than 14 days).
+      let batch; guard = 0; let swept = 0;
+      do {
+        batch = await ch.messages.fetch({ limit: 100 });
+        for (const msg of batch.values()) { await msg.delete().catch(() => {}); swept++; }
+        guard++;
+      } while (batch.size > 0 && guard < 30);
+      if (swept > 0) console.log(`purge #${ch.name}: swept ${swept} old message(s)`);
     } catch (e) { console.error(`purge #${ch.name}:`, e.message); }
   }
 }
