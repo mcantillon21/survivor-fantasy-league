@@ -3,7 +3,11 @@
   "version": "0.1.0",
   "description": "AI-hosted online Survivor game with Discord bot and web challenges",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
+    "start": "node src/bot/index.js",
     "bot": "node src/bot/index.js",
     "dev": "node --watch src/bot/index.js",
     "test": "node --test src/bot/*.test.js",
