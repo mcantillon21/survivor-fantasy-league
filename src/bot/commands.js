@@ -326,10 +326,13 @@ export async function handleStart(interaction) {
       msg += `${emoji} **${tribeLabel(tribe, result.tribeNames)} (${members.length})**\n${members.map((m) => `• ${m}`).join('\n')}\n\n`;
     }
     if (test) msg += `⚠️ **Test mode** — started with a reduced roster of ${result.count}.\n\n`;
-    msg += `Each tribe only sees its own channel. The host will post the first immunity challenge — merge at ${result.mergeAt}.`;
+    msg += `Each tribe only sees its own channel. The first immunity challenge is up in #${CH.lobby} — a new one drops every other day. Merge at ${result.mergeAt}.`;
   }
   await post(guild, CH.announcements, msg);
-  await interaction.editReply(`🌴 Season started — the roster is posted in #${CH.announcements}.`);
+  // First challenge drops immediately — the scheduler takes over every 48h from now.
+  const started = { ...game, status: 'live' };
+  await postChallengeForGame(interaction.client, started);
+  await interaction.editReply(`🌴 Season started — the roster is posted in #${CH.announcements} and the first challenge is live in #${CH.lobby}.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -843,49 +846,54 @@ export async function handleStandings(interaction) {
 }
 
 // ---------------------------------------------------------------------------
-// Scheduled challenge — Sunday and Wednesday at 7:30pm local time by default.
-// Override with CHALLENGE_DAYS (0=Sun..6=Sat), HOUR, and MINUTE.
+// Scheduled challenges — every other day, anchored to each game's start: the
+// first challenge drops at /start, then a new one every 48 hours from that
+// moment (at the same time of day the game started). A drop is skipped while
+// a round's challenge is still active — the next boundary picks it back up.
 // ---------------------------------------------------------------------------
-export async function postScheduledChallenges(client) {
-  const { data: games } = await supabase.from('games').select('*').eq('status', 'live');
-  for (const game of games || []) {
-    const state = await getGameState(game.id);
-    if (!state || !['tribe', 'individual'].includes(state.phase)) continue; // skip final/ended/setup
-    if (state.active_challenge) continue; // never replace an official challenge mid-round
+const CHALLENGE_INTERVAL_MS = 48 * 60 * 60 * 1000;
 
-    const slug = CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
-    await updateGameState(game.id, { active_challenge: slug });
+// Draw and announce a challenge for one game. Returns true if one was posted.
+export async function postChallengeForGame(client, game) {
+  const state = await getGameState(game.id);
+  if (!state || !['tribe', 'individual'].includes(state.phase)) return false; // skip final/ended/setup
+  if (state.active_challenge) return false; // never replace an official challenge mid-round
 
-    const guild = game.discord_guild_id ? client.guilds.cache.get(game.discord_guild_id) : null;
-    if (!guild) continue;
-    const teamLine = state.phase === 'tribe'
-      ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
-      : 'Every player for themselves. Only the top scorer is safe.';
-    await post(guild, CH.lobby,
-      `🌙 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge`);
-  }
+  const slug = CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
+  await updateGameState(game.id, { active_challenge: slug });
+
+  const guild = game.discord_guild_id ? client.guilds.cache.get(game.discord_guild_id) : null;
+  if (!guild) return false;
+  const teamLine = state.phase === 'tribe'
+    ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
+    : 'Every player for themselves. Only the top scorer is safe.';
+  await post(guild, CH.lobby,
+    `🌙 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge`);
+  return true;
 }
 
 export function startChallengeScheduler(client) {
-  const hour = Number(process.env.CHALLENGE_HOUR ?? 19);
-  const minute = Number(process.env.CHALLENGE_MINUTE ?? 30);
-  const days = (process.env.CHALLENGE_DAYS || '0,3').split(',').map((day) => Number(day.trim()));
-  const run = async () => {
-    try { await postScheduledChallenges(client); } catch (e) { console.error('Scheduled challenge failed:', e.message); }
-  };
-  const scheduleNext = () => {
-    const now = new Date();
-    let next = null;
-    for (let offset = 0; offset <= 7 && !next; offset++) {
-      const candidate = new Date(now);
-      candidate.setDate(now.getDate() + offset);
-      candidate.setHours(hour, minute, 0, 0);
-      if (days.includes(candidate.getDay()) && candidate > now) next = candidate;
-    }
-    if (!next) return;
-    const ms = next.getTime() - now.getTime();
-    console.log(`⏰ Next challenge drop: ${next.toLocaleString()}`);
-    setTimeout(async () => { await run(); scheduleNext(); }, ms);
-  };
-  scheduleNext();
+  const TICK_MS = 60 * 1000;
+  let lastTick = Date.now();
+  console.log('⏰ Challenge scheduler armed: first drop at /start, then every other day per game');
+  setInterval(async () => {
+    const now = Date.now();
+    try {
+      const { data: games } = await supabase.from('games').select('*').eq('status', 'live');
+      for (const game of games || []) {
+        if (!game.started_at) continue;
+        const anchor = new Date(game.started_at).getTime();
+        // Fire when a 48h boundary since start falls inside (lastTick, now].
+        // The n=0 drop is /start's own; boundaries missed while the bot was
+        // down are skipped (the next one is at most 48h away).
+        const before = Math.floor((lastTick - anchor) / CHALLENGE_INTERVAL_MS);
+        const after = Math.floor((now - anchor) / CHALLENGE_INTERVAL_MS);
+        if (after > before && after >= 1) {
+          const posted = await postChallengeForGame(client, game);
+          if (posted) console.log(`⏰ Challenge dropped for ${game.code} (day ${after * 2})`);
+        }
+      }
+    } catch (e) { console.error('Scheduled challenge failed:', e.message); }
+    lastTick = now;
+  }, TICK_MS);
 }
