@@ -13,6 +13,7 @@ import {
   handleMerge,
   handleSuggestName,
   handleNamePoll,
+  handleWipe,
   handleStandings,
   handleEndGame,
   startChallengeScheduler,
@@ -98,6 +99,10 @@ const commands = [
     description: 'Open the merged-tribe naming poll, then run again to pick the winner (host only)',
   },
   {
+    name: 'wipe',
+    description: 'Clear all game-channel messages without touching the season (host only)',
+  },
+  {
     name: 'newgame',
     description: 'Create a season for this server (host only)',
     options: [
@@ -181,6 +186,8 @@ client.on('interactionCreate', async (interaction) => {
       await handleSuggestName(interaction);
     } else if (commandName === 'namepoll') {
       await handleNamePoll(interaction);
+    } else if (commandName === 'wipe') {
+      await handleWipe(interaction);
     } else if (commandName === 'endgame') {
       await handleEndGame(interaction);
     }

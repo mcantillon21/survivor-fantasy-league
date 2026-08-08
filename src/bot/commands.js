@@ -176,6 +176,29 @@ async function hostOnly(interaction) {
 }
 
 // ---------------------------------------------------------------------------
+// /wipe — (host) clear game-channel messages without touching the season
+// ---------------------------------------------------------------------------
+export async function handleWipe(interaction) {
+  if (!(await hostOnly(interaction))) return;
+  // Ephemeral so the purge below cannot delete this reply.
+  await interaction.deferReply({ ephemeral: true });
+
+  const current = await getCurrentGame(interaction.guildId, { includeEnded: true });
+  const state = current ? await getGameState(current.id) : null;
+  await resetAndPurgeChannels(interaction.guild, state);
+
+  // If a season is still open for sign-ups, the wipe just deleted its sign-up
+  // prompt — re-post it so players can keep registering.
+  const active = await getCurrentGame(interaction.guildId);
+  const reposted = active && active.status === 'setup';
+  if (reposted) {
+    await post(interaction.guild, CH.announcements,
+      `🌱 **A NEW SEASON HAS BEGUN — ${active.name.toUpperCase()}** (\`${active.code}\`)\n\nPlayers: use \`/register\` right here to join. When everyone's in, the host runs \`/start\` to form the tribes.`);
+  }
+  await interaction.editReply(`🧹 Channels wiped.${reposted ? ` Sign-up prompt re-posted in #${CH.announcements}.` : ''}`);
+}
+
+// ---------------------------------------------------------------------------
 // /newgame — (host) create a season for this server
 // ---------------------------------------------------------------------------
 export async function handleNewGame(interaction) {
