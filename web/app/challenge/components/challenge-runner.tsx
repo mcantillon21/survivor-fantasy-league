@@ -19,6 +19,8 @@ interface StoredAttempt {
 }
 
 export function ChallengeRunner({ challenge, game, official, round = 0 }: { challenge: ChallengeDefinition; game: Game; official: boolean; round?: number }) {
+  // Practice runs come from the public /practice gallery, not a game's page.
+  const backHref = official ? `/game/${game.code}/challenge` : '/practice';
   const [phase, setPhase] = useState<RunnerPhase>('briefing');
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
@@ -177,7 +179,7 @@ export function ChallengeRunner({ challenge, game, official, round = 0 }: { chal
         <div className="runner-shell">
           <header className="runner-heading">
             <div>
-              <Link href={`/game/${game.code}/challenge`} className="back-link">← Challenges</Link>
+              <Link href={backHref} className="back-link">← Challenges</Link>
               <h1>{challenge.name}</h1>
             </div>
             <div className="run-clock" role="timer" aria-label={`${elapsedSeconds} seconds elapsed`}>
@@ -220,7 +222,7 @@ export function ChallengeRunner({ challenge, game, official, round = 0 }: { chal
               </p>
             )}
             <div className="result-actions">
-              <Link href={`/game/${game.code}/challenge`} className="button button--primary">Challenges</Link>
+              <Link href={backHref} className="button button--primary">Challenges</Link>
               {!official && <button type="button" className="button button--ghost" onClick={restartPractice}>Again</button>}
             </div>
           </div>
@@ -235,7 +237,7 @@ export function ChallengeRunner({ challenge, game, official, round = 0 }: { chal
       <section className="runner-shell runner-shell--entry">
         <header className="runner-heading runner-heading--entry">
           <div>
-            <Link href={`/game/${game.code}/challenge`} className="back-link">← Challenges</Link>
+            <Link href={backHref} className="back-link">← Challenges</Link>
             <p>{official ? 'Official' : 'Practice'} · {challenge.duration}</p>
             <h1>{challenge.name}</h1>
           </div>
