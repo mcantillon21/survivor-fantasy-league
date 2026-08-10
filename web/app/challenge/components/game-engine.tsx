@@ -914,7 +914,17 @@ function TorchScramble({ seed, persistenceKey, onComplete }: EngineProps) {
 }
 
 // Retyping challenge: copy the passage exactly. Paste is blocked.
-const TRANSCRIPTION_PASSAGE = 'Thirty-nine days, one survivor. The rain has soaked every ember, the rice is nearly gone, and somewhere on this beach an idol is still buried. Dig deep, trust carefully, and never turn your back on the fire.';
+// Curly quotes/ellipsis normalized to typable characters; newlines count.
+const TRANSCRIPTION_PASSAGE = `Now this season's in the hands of the fans
+They're calling the shots, it's out of our hands
+They picked the buffs you're wearing today
+And the rice and supplies, well, they said 'No way'
+And now it's time to drop another fan vote
+The dangerous kind, this one will cut your throat
+So are you ready to drop your plans?
+Are you ready to drop your hands?
+Are you ready to drop your bluffs?
+Because the fans have spoken, it's time to... Drop your buffs`;
 
 function TorchTranscription({ onComplete }: EngineProps) {
   const [value, setValue] = useState('');
@@ -934,13 +944,13 @@ function TorchTranscription({ onComplete }: EngineProps) {
     <section className="engine-board engine-board--transcribe" aria-labelledby="transcribe-title">
       <div className="engine-progress"><span>Camp transcription</span><span>{value.length} / {TRANSCRIPTION_PASSAGE.length} chars</span></div>
       <h2 id="transcribe-title">Retype the message exactly — every letter, space, and comma.</h2>
-      <div className="cipher-strip" aria-label="Passage to retype" style={{ userSelect: 'none' }}>{TRANSCRIPTION_PASSAGE}</div>
+      <div className="cipher-strip" aria-label="Passage to retype" style={{ userSelect: 'none', whiteSpace: 'pre-wrap', textAlign: 'left' }}>{TRANSCRIPTION_PASSAGE}</div>
       <textarea
         value={value}
         onChange={(event) => setValue(event.target.value)}
         onPaste={(event) => event.preventDefault()}
         onDrop={(event) => event.preventDefault()}
-        rows={4}
+        rows={10}
         autoComplete="off"
         spellCheck="false"
         aria-label="Type the passage here"
