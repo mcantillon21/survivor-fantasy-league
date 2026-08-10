@@ -1,14 +1,11 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   SYMBOLS,
-  caesarEncode,
   createCoordinateSecret,
-  createMaze,
   createRng,
   createSymbolSequence,
-  normalizeAnswer,
   scoreCoordinateGuess,
   shuffleSeeded,
 } from '@/lib/challenges/logic';
@@ -82,188 +79,61 @@ function ChoiceEngine({
   );
 }
 
+// Ported from the host's Kahoot ("Survivor Trivia Seasons 1-40"), minus the
+// picture-identification and audio questions that cannot work as text.
 const TRIVIA_QUESTIONS: ChoiceQuestion[] = [
-  { prompt: 'Which season was the first to end with a Final Three at the last Tribal Council?', options: ['Panama', 'Cook Islands', 'Fiji', 'Micronesia'], answer: 1 },
-  { prompt: 'Who was the first castaway to win the title of Sole Survivor twice?', options: ['Parvati Shallow', 'Sandra Diaz-Twine', 'Amber Mariano', 'Tony Vlachos'], answer: 1 },
-  { prompt: 'The Hidden Immunity Idol was introduced in which season?', options: ['Palau', 'Guatemala', 'Panama', 'Vanuatu'], answer: 1 },
-  { prompt: 'Exile Island first appeared in which season?', options: ['Panama', 'Palau', 'Cook Islands', 'Fiji'], answer: 0 },
-  { prompt: 'Which season was the FIRST to split tribes by Brains, Brawn, and Beauty?', options: ['Kaôh Rōng', 'Cagayan', 'Worlds Apart', 'San Juan del Sur'], answer: 1 },
-  { prompt: 'What season number was Winners at War?', options: ['38', '39', '40', '41'], answer: 2 },
-  { prompt: 'Who won Winners at War?', options: ['Sarah Lacina', 'Tony Vlachos', 'Michele Fitzgerald', 'Ben Driebergen'], answer: 1 },
-  { prompt: 'Who won Survivor: Redemption Island?', options: ['Russell Hantz', 'Rob Mariano', 'Phillip Sheppard', 'Grant Mattos'], answer: 1 },
-  { prompt: 'How many days does a classic pre-Season-41 full season last?', options: ['36', '39', '42', '26'], answer: 1 },
-  { prompt: 'Parvati Shallow won which season?', options: ['Cook Islands', 'Micronesia', 'Heroes vs. Villains', 'Caramoan'], answer: 1 },
+  { prompt: 'Who notoriously flipped a split alliance in season 23?', options: ['Tyson', 'Cochran', 'Joe Anglim', 'Andrea'], answer: 1 },
+  { prompt: 'By episode 7 of Winners at War, which castaway had the most confessionals?', options: ['Tony', 'Michele', 'Rob', 'Adam'], answer: 3 },
+  { prompt: 'Which of the following players featured in exactly two seasons?', options: ['Sandra Diaz-Twine', 'Johnny Fairplay', 'Tony Vlachos', 'Jeremy Collins'], answer: 1 },
+  { prompt: 'Who of the following did not return for season 38?', options: ['Wentworth', 'Wardog', 'Joe', 'Aubry'], answer: 1 },
+  { prompt: 'What season of Survivor is the only one to feature both a gravedigger and an ice cream scooper?', options: ['13', '14', '16', '17'], answer: 2 },
+  { prompt: 'Upolu was the name of a tribe in what season?', options: ['13', '14', '20', '23'], answer: 3 },
+  { prompt: 'Who was voted by the Winners at War cast to be the best player to never win a season?', options: ['Colby', 'Cirie', 'Russell', 'Rick Devens'], answer: 1 },
+  { prompt: 'Who holds the record for most career individual immunity challenges won?', options: ['Ozzy Lusth', 'Joe Anglim', 'Colby Donaldson', 'Boston Rob'], answer: 3 },
+  { prompt: 'What does Survivor refer to its soundtrack as?', options: ['New Frontier', 'Ancient Voices', 'The Strong Will Survive', 'Survivor Yell'], answer: 1 },
+  { prompt: 'Who was Gary Hogeboom?', options: ['The name of the contestant that had left the game before it even started.', 'The husband of Sandra Diaz-Twine.', 'The finder of the first ever hidden immunity idol.', 'A producer of the show.'], answer: 2 },
+  { prompt: 'Who holds a record for receiving 36 votes total in one season?', options: ['Andrea', 'Wentworth', 'Ciera', 'Ozzy'], answer: 0 },
+  { prompt: 'Who is the oldest Survivor winner in history?', options: ['Tom', 'Bob', 'Tony (second win)', 'Cochran'], answer: 1 },
+  { prompt: 'Who said "Be the wizard"?', options: ['Coach', 'Tyson', 'Cirie', 'Taj'], answer: 0 },
+  { prompt: 'Ciera Eastin...', options: ['played the most hidden immunity idols in one season.', 'played the game 4 times.', 'quit the game because she didn\'t want to go to the bathroom in the water.', 'voted out her mother.'], answer: 3 },
+  { prompt: 'Which one has a different occupation than the rest?', options: ['Tony Vlachos', 'Sarah Lacina', 'Any cop', 'Boston Rob'], answer: 3 },
+  { prompt: 'What season was circulated around notorious mistakes made by players from previous seasons?', options: ['28', '31', '34', '36'], answer: 3 },
+  { prompt: 'Cambodia Second Chance is the name of what season?', options: ['29', '30', '31', '32'], answer: 2 },
+  { prompt: 'What season did not divide tribes by fans and favorites?', options: ['16', '21', '26'], answer: 1 },
+  { prompt: 'What season included 3 players that were medically evacuated from a previous season?', options: ['Philippines', 'Caramoan', 'Blood vs. Water', 'Worlds Apart'], answer: 0 },
+  { prompt: 'Tribes from season 32 were divided by brains, brawn, and beauty.', options: ['True', 'False'], answer: 0 },
+  { prompt: 'Dean Kowalski earned how many votes at final tribal council in season 39?', options: ['8', '4', '3', '2'], answer: 3 },
+  { prompt: 'Which season is the only season the player who received 0 votes at final tribal selected the winner?', options: ['Heroes vs. Healers vs. Hustlers', 'Ghost Island', 'David vs. Goliath', 'Edge of Extinction'], answer: 1 },
+  { prompt: 'What is the name of the alliance built by Sarah Lacina and Tony Vlachos?', options: ['Toys R Us', 'Widows R Us', 'Cops R Us', 'Mason Dixon'], answer: 2 },
+  { prompt: 'Which season did the reading of the final tribal votes take place in Jeff Probst\'s garage?', options: ['Caramoan', 'Edge of Extinction', 'Micronesia', 'Winners at War'], answer: 3 },
+  { prompt: 'Which of the following seasons did NOT take place in Pearl Islands, Panama?', options: ['5', '7', '8', '12'], answer: 0 },
+  { prompt: 'Which season aired the show on Thursdays instead of Wednesdays?', options: ['1', '17', '25', '29'], answer: 1 },
+  { prompt: 'The winner of Survivor is deemed the "__________ Survivor".', options: ['Sole', 'Ultimate', 'Surviving', 'Cool'], answer: 0 },
+  { prompt: 'Who got really mad at their own family member due to their lack in skill at the "family visit"?', options: ['Rupert', 'Colby', 'Andrea', 'Taj'], answer: 1 },
+  { prompt: 'The "Exile Alliance"...', options: ['occurred in season 10.', 'came after the Mason Dixon alliance.', 'included Coach and Tyson.', 'held two idols at one point.'], answer: 3 },
+  { prompt: 'Chris _____ was deemed Sole Survivor of season ___.', options: ['Underworth, 38', 'Underwood, 38', 'Underworth, 39', 'Underwood, 39'], answer: 1 },
+  { prompt: 'What "David" became victorious in a modern season?', options: ['Jeremy Collins', 'Sarah Lacina', 'Mike White', 'Nick Wilson'], answer: 3 },
+  { prompt: 'Who created the merged tribe name for Survivor: Micronesia?', options: ['James', 'Amanda', 'Cirie', 'Erik'], answer: 3 },
+  { prompt: 'He claimed the name was Micronesian for ____. He lied.', options: ['Good', 'Survivor', 'Peace', 'Love'], answer: 0 },
+  { prompt: 'Borneo is...', options: ['Richard Hatch\'s first and only season.', 'Richard Hatch\'s last season.', 'the first season of Survivor.', 'a season where all first vote-outs returned.'], answer: 2 },
+  { prompt: 'Who is Russell Hantz\'s nephew?', options: ['Brendon', 'Brendan', 'Brandon', 'Branden'], answer: 2 },
+  { prompt: 'Who had to skip a season of running in college to play the game?', options: ['Erik', 'Sandra', 'Tyson', 'Sundra'], answer: 0 },
+  { prompt: 'Parvati is...', options: ['a villain', 'a hero', 'not from Heroes vs. Villains'], answer: 0 },
+  { prompt: 'Jerri is...', options: ['a villain', 'a hero', 'not from Heroes vs. Villains'], answer: 0 },
+  { prompt: 'Boston Rob is married to ______.', options: ['Andrea', 'Nicole', 'J\'tia', 'Amber'], answer: 3 },
+  { prompt: 'Who likes Applebee\'s as their favorite sit-down restaurant?', options: ['Tyson', 'Coach', 'Karishma', 'Tony'], answer: 2 },
+  { prompt: 'Who was removed from Season 39 due to being too touchy behind the scenes?', options: ['Wardog', 'Dan', 'Wentworth', 'Larry'], answer: 1 },
+  { prompt: 'Which winner\'s twin was voted out first in the same season?', options: ['Parvati', 'Natalia', 'Natalie', 'Mike'], answer: 2 },
+  { prompt: 'Sarah Lacina is the winner of...', options: ['Heroes vs. Healers vs. Hustlers', 'Second Chance Cambodia', 'Game Changers', 'Ghost Island'], answer: 2 },
 ];
 
-const TRIBAL_PULSE_QUESTIONS: ChoiceQuestion[] = [
-  { prompt: 'Which trait would most players value in a close ally?', options: ['Predictability', 'Challenge strength', 'Entertainment', 'Mystery'], answer: 0 },
-  { prompt: 'Which mistake feels most dangerous after the merge?', options: ['Losing reward', 'Being caught in two alliances', 'Voting early', 'Sharing food'], answer: 1 },
-  { prompt: 'Which player earns the most trust?', options: ['The loudest strategist', 'The person whose actions match their promises', 'The challenge winner', 'The newest number'], answer: 1 },
-  { prompt: 'What would the tribe most likely protect first?', options: ['Camp comfort', 'A loyal vote', 'A funny story', 'A risky idol clue'], answer: 1 },
-  { prompt: 'Which behavior raises suspicion fastest?', options: ['Asking questions', 'A sudden change in routine', 'Helping at camp', 'Losing a puzzle'], answer: 1 },
-  { prompt: 'What matters most in a tied vote?', options: ['Volume', 'Reliable numbers', 'Past challenge scores', 'Random chance'], answer: 1 },
-  { prompt: 'Which reward is most strategically useful?', options: ['Food', 'Private information', 'Comfort', 'A souvenir'], answer: 1 },
-  { prompt: 'What should a player do after making a visible move?', options: ['Celebrate publicly', 'Lower their threat and rebuild trust', 'Stop strategizing', 'Demand credit'], answer: 1 },
-];
 
-interface TextStage {
-  label: string;
-  prompt: string;
-  answer: string;
-  detail?: string;
-}
 
-function TextStageEngine({
-  stages,
-  persistenceKey,
-  onComplete,
-}: EngineProps & { stages: TextStage[] }) {
-  const [state, setState] = useStoredGameState(persistenceKey, { index: 0, mistakes: 0, solved: 0 });
-  const [value, setValue] = useState('');
-  const [error, setError] = useState('');
-  const stage = stages[state.index];
-  const solvedSoFar = state.solved || 0;
-  const mistakesSoFar = state.mistakes || 0;
 
-  const finish = (solved: number) => {
-    const skipped = stages.length - solved;
-    const rawScore = Math.max(0, Math.round((solved / stages.length) * 1000) - mistakesSoFar * 25);
-    const summary = `Solved ${solved} of ${stages.length}${skipped ? `, skipped ${skipped}` : ''}${mistakesSoFar ? `, ${mistakesSoFar} wrong ${mistakesSoFar === 1 ? 'attempt' : 'attempts'}` : ''}.`;
-    onComplete({ rawScore, summary });
-  };
 
-  // Advance to the next stage, or finish. `didSolve` says whether this stage was solved (vs skipped).
-  const advance = (didSolve: boolean) => {
-    const solved = solvedSoFar + (didSolve ? 1 : 0);
-    if (state.index === stages.length - 1) { finish(solved); return; }
-    setState({ index: state.index + 1, mistakes: mistakesSoFar, solved });
-    setValue('');
-    setError('');
-  };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!value.trim()) {
-      setError('Enter an answer, or skip this puzzle.');
-      return;
-    }
-    if (normalizeAnswer(value) !== normalizeAnswer(stage.answer)) {
-      setState({ ...state, mistakes: mistakesSoFar + 1 });
-      setError('That is not right. Try again, or skip it for no points.');
-      return;
-    }
-    advance(true);
-  };
 
-  return (
-    <section className="engine-board engine-board--text" aria-labelledby="text-stage-title">
-      <div className="engine-progress"><span>{stage.label}</span><span>Lock {state.index + 1} / {stages.length}</span></div>
-      <h2 id="text-stage-title">{stage.prompt}</h2>
-      {stage.detail && <div className="cipher-strip" aria-label="Encoded transmission">{stage.detail}</div>}
-      <form className="puzzle-answer" onSubmit={submit} noValidate>
-        <label htmlFor="puzzle-answer">Your answer</label>
-        <div><input id="puzzle-answer" value={value} onChange={(event) => { setValue(event.target.value); setError(''); }} autoComplete="off" spellCheck="false" /><button className="button button--primary" type="submit">Test answer</button></div>
-        {error && <p className="field-error" role="alert">{error}</p>}
-      </form>
-      <div className="engine-actions">
-        <button type="button" className="button button--ghost" onClick={() => advance(false)}>Skip this puzzle (no points)</button>
-      </div>
-      <p className="engine-penalty">Solved {solvedSoFar} / {stages.length} · Wrong attempts: {mistakesSoFar}</p>
-    </section>
-  );
-}
 
-function FireSignalCipher(props: EngineProps) {
-  const shift = (Math.floor(createRng(props.seed)() * 5) + 2);
-  const stages: TextStage[] = [
-    { label: 'Signal one', prompt: `Every letter moved ${shift} places forward. Decode the transmission.`, detail: caesarEncode('TRIBE', shift), answer: 'TRIBE' },
-    { label: 'Signal two', prompt: 'The same shift still holds. Spaces are preserved.', detail: caesarEncode('HIDDEN IDOL', shift), answer: 'HIDDEN IDOL' },
-    { label: 'Signal three', prompt: 'Final transmission. Bring the message home.', detail: caesarEncode('THE FLAME STAYS LIT', shift), answer: 'THE FLAME STAYS LIT' },
-  ];
-  return <TextStageEngine {...props} stages={stages} />;
-}
-
-function IdolLockbox(props: EngineProps) {
-  const shift = Math.floor(createRng(`idol:${props.seed}`)() * 4) + 2;
-  const finalCode = String((21 + shift) * 3);
-  const stages: TextStage[] = [
-    { label: 'Outer lock', prompt: `Shift each letter backward ${shift} places.`, detail: caesarEncode('TORCH', shift), answer: 'TORCH' },
-    { label: 'Middle lock', prompt: 'Continue the sequence: 2, 3, 5, 8, 13, …', detail: 'The next number is your key.', answer: '21' },
-    { label: 'Idol seal', prompt: `Add ${shift} to the middle-lock answer, then multiply by 3.`, detail: 'Enter the final numeric combination.', answer: finalCode },
-  ];
-  return <TextStageEngine {...props} stages={stages} />;
-}
-
-function ChainReaction(props: EngineProps) {
-  const stages: TextStage[] = [
-    { label: 'Link one', prompt: 'How many letters are in IMMUNITY?', answer: '8' },
-    { label: 'Link two', prompt: 'Square the previous answer.', answer: '64' },
-    { label: 'Link three', prompt: 'Add the number of players in a final three.', answer: '67' },
-    { label: 'Link four', prompt: 'Convert 67 to a letter using repeated A–Z cycles.', detail: '1=A, 26=Z, 27=A…', answer: 'O' },
-    { label: 'Final link', prompt: 'Complete the phrase: Outwit. Outplay. _____.', answer: 'Outlast' },
-  ];
-  return <TextStageEngine {...props} stages={stages} />;
-}
-
-function RiddleTrials(props: EngineProps) {
-  const stages: TextStage[] = [
-    { label: 'Trial one', prompt: 'The more you take away from me, the bigger I become. What am I?', answer: 'hole' },
-    { label: 'Trial two', prompt: 'Forward I am heavy, but backward I am not. What am I?', answer: 'ton' },
-    { label: 'Trial three', prompt: 'I am not alive, yet I grow; I have no lungs, yet I need air; I have no mouth, yet water kills me. What am I?', answer: 'fire' },
-    { label: 'Trial four', prompt: 'What English word is always spelled incorrectly?', answer: 'incorrectly' },
-    { label: 'Final trial', prompt: 'A man shows a photo and says: “Brothers and sisters I have none, but this man’s father is my father’s son.” Who is in the photo? (one word)', answer: 'son' },
-  ];
-  return <TextStageEngine {...props} stages={stages} />;
-}
-
-function SurvivorGauntlet(props: EngineProps) {
-  const stages: TextStage[] = [
-    { label: 'Cipher gate', prompt: 'Shift KHOOR backward by three.', answer: 'HELLO' },
-    { label: 'Pattern gate', prompt: 'Complete the pattern: 3, 6, 12, 24, …', answer: '48' },
-    { label: 'Memory gate', prompt: 'Read once: FLAME–ROPE–MOON. Enter the middle item.', answer: 'ROPE' },
-    { label: 'Deduction gate', prompt: 'I protect one player, expire after a vote, and hang around your neck. What am I?', answer: 'IMMUNITY' },
-  ];
-  return <TextStageEngine {...props} stages={stages} />;
-}
-
-function TorchlightLabyrinth({ seed, persistenceKey, onComplete }: EngineProps) {
-  const maze = useMemo(() => createMaze(seed), [seed]);
-  const [state, setState] = useStoredGameState(persistenceKey, { position: maze.start, moves: 0 });
-
-  const move = (rowStep: number, columnStep: number) => {
-    const next: [number, number] = [state.position[0] + rowStep, state.position[1] + columnStep];
-    if (maze.grid[next[0]]?.[next[1]] !== 0) return;
-    const moves = state.moves + 1;
-    if (next[0] === maze.goal[0] && next[1] === maze.goal[1]) {
-      onComplete({ rawScore: Math.max(250, 1000 - Math.max(0, moves - 16) * 18), summary: `The immunity flame was reached in ${moves} moves.` });
-      return;
-    }
-    setState({ position: next, moves });
-  };
-
-  return (
-    <section className="engine-board engine-board--maze" aria-labelledby="maze-title">
-      <div className="engine-progress"><span>Find the immunity flame</span><span>{state.moves} moves</span></div>
-      <h2 id="maze-title">Navigate the torch through the labyrinth.</h2>
-      <div className="maze-grid" style={{ gridTemplateColumns: `repeat(${maze.grid.length}, 1fr)` }} aria-label="Maze board">
-        {maze.grid.flatMap((row, rowIndex) => row.map((cell, columnIndex) => {
-          const player = state.position[0] === rowIndex && state.position[1] === columnIndex;
-          const goal = maze.goal[0] === rowIndex && maze.goal[1] === columnIndex;
-          return <span key={`${rowIndex}-${columnIndex}`} className={`maze-cell ${cell ? 'maze-cell--wall' : ''} ${player ? 'maze-cell--player' : ''} ${goal ? 'maze-cell--goal' : ''}`} aria-label={player ? 'Current position' : goal ? 'Goal' : undefined}>{player ? '●' : goal ? '✦' : ''}</span>;
-        }))}
-      </div>
-      <div className="maze-controls" aria-label="Movement controls">
-        <button type="button" aria-label="Move up" onClick={() => move(-1, 0)}>↑</button>
-        <button type="button" aria-label="Move left" onClick={() => move(0, -1)}>←</button>
-        <button type="button" aria-label="Move down" onClick={() => move(1, 0)}>↓</button>
-        <button type="button" aria-label="Move right" onClick={() => move(0, 1)}>→</button>
-      </div>
-      <div className="engine-actions">
-        <button type="button" className="button button--ghost" onClick={() => onComplete({ rawScore: 0, summary: 'Skipped the labyrinth.' })}>Skip (no points)</button>
-      </div>
-    </section>
-  );
-}
 
 interface MemoryState {
   round: number;
@@ -356,48 +226,7 @@ function IslandCoordinates({ seed, persistenceKey, onComplete }: EngineProps) {
   );
 }
 
-const SUPPLIES = [
-  { id: 'water', name: 'Fresh water', weight: 4, value: 10 },
-  { id: 'rice', name: 'Rice sack', weight: 3, value: 7 },
-  { id: 'tarp', name: 'Weather tarp', weight: 4, value: 8 },
-  { id: 'rope', name: 'Rope coil', weight: 2, value: 6 },
-  { id: 'flint', name: 'Flint', weight: 1, value: 5 },
-  { id: 'medkit', name: 'Medical kit', weight: 3, value: 9 },
-  { id: 'fishing', name: 'Fishing kit', weight: 4, value: 10 },
-  { id: 'comfort', name: 'Comfort item', weight: 2, value: 3 },
-];
 
-function SupplyDrop({ persistenceKey, onComplete }: EngineProps) {
-  const [selected, setSelected] = useStoredGameState<string[]>(persistenceKey, []);
-  const [error, setError] = useState('');
-  const chosen = SUPPLIES.filter((item) => selected.includes(item.id));
-  const weight = chosen.reduce((total, item) => total + item.weight, 0);
-  const baseValue = chosen.reduce((total, item) => total + item.value, 0);
-  const setBonus = selected.includes('tarp') && selected.includes('rope') ? 5 : 0;
-
-  const toggle = (id: string) => {
-    setSelected((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-    setError('');
-  };
-
-  const lockLoadout = () => {
-    if (!selected.includes('water')) { setError('Fresh water is mandatory.'); return; }
-    if (weight > 15) { setError(`Your bag is ${weight - 15} weight units over capacity.`); return; }
-    const value = baseValue + setBonus;
-    onComplete({ rawScore: Math.round((value / 43) * 1000), summary: `Packed ${chosen.length} items at ${weight}/15 weight for ${value} survival value.` });
-  };
-
-  return (
-    <section className="engine-board engine-board--supply" aria-labelledby="supply-title">
-      <div className="engine-progress"><span>Camp supply manifest</span><span className={weight > 15 ? 'text-danger' : ''}>{weight} / 15 weight</span></div>
-      <h2 id="supply-title">Build the strongest legal loadout.</h2>
-      <div className="supply-grid">{SUPPLIES.map((item) => <button key={item.id} type="button" aria-pressed={selected.includes(item.id)} onClick={() => toggle(item.id)}><strong>{item.name}</strong><span>{item.weight} weight · {item.value} value</span></button>)}</div>
-      {setBonus > 0 && <p className="bonus-note">Shelter set bonus active: tarp + rope adds 5 value.</p>}
-      {error && <p className="field-error" role="alert">{error}</p>}
-      <button type="button" className="button button--primary" onClick={lockLoadout}>Lock loadout</button>
-    </section>
-  );
-}
 
 interface RiskState { round: number; deck: number[]; index: number; hand: number[]; banked: number; }
 
@@ -435,15 +264,18 @@ function RiskTheFlame({ seed, persistenceKey, onComplete }: EngineProps) {
 
 interface OathState { round: number; hits: number; falseTaps: number; phase: 'wait' | 'live' | 'done'; }
 
+const OATH_ROUNDS = 8;
+
 function OathOfAttention({ seed, persistenceKey, onComplete }: EngineProps) {
   const [state, setState] = useStoredGameState<OathState>(persistenceKey, { round: 0, hits: 0, falseTaps: 0, phase: 'wait' });
-  const delay = useMemo(() => 600 + Math.floor(createRng(`${seed}:${state.round}`)() * 900), [seed, state.round]);
+  // Wide spread between flames (0.5s–3.5s) so the rhythm never becomes predictable.
+  const delay = useMemo(() => 500 + Math.floor(createRng(`${seed}:${state.round}`)() * 3000), [seed, state.round]);
 
   const advance = useCallback((hit: boolean) => {
     const hits = state.hits + (hit ? 1 : 0);
-    if (state.round === 4) {
-      setState({ round: 5, hits, falseTaps: state.falseTaps, phase: 'done' });
-      onComplete({ rawScore: Math.max(0, hits * 200 - state.falseTaps * 100), summary: `${hits} of 5 live flames caught with ${state.falseTaps} early taps.` });
+    if (state.round === OATH_ROUNDS - 1) {
+      setState({ round: OATH_ROUNDS, hits, falseTaps: state.falseTaps, phase: 'done' });
+      onComplete({ rawScore: Math.max(0, hits * 125 - state.falseTaps * 60), summary: `${hits} of ${OATH_ROUNDS} live flames caught with ${state.falseTaps} early taps.` });
       return;
     }
     setState({ ...state, round: state.round + 1, hits, phase: 'wait' });
@@ -467,7 +299,7 @@ function OathOfAttention({ seed, persistenceKey, onComplete }: EngineProps) {
 
   return (
     <section className="engine-board engine-board--oath" aria-labelledby="oath-title">
-      <div className="engine-progress"><span>Signal {Math.min(state.round + 1, 5)} / 5</span><span>{state.hits} caught · {state.falseTaps} early</span></div>
+      <div className="engine-progress"><span>Signal {Math.min(state.round + 1, OATH_ROUNDS)} / {OATH_ROUNDS}</span><span>{state.hits} caught · {state.falseTaps} early</span></div>
       <h2 id="oath-title">Wait for the flame to turn live.</h2>
       <button type="button" className={`oath-flame ${state.phase === 'live' ? 'oath-flame--live' : ''}`} onClick={tap} aria-label={state.phase === 'live' ? 'Live flame — tap now' : 'Dormant flame — wait'}>
         <span aria-hidden="true">{state.phase === 'live' ? '✦' : '·'}</span><strong>{state.phase === 'live' ? 'Strike now' : 'Hold your focus'}</strong>
@@ -624,6 +456,70 @@ function VaultLock({ seed, onComplete }: EngineProps) {
         </button>
       </div>
       <p className="engine-penalty">Tap the button or press Space when the dial reaches the notch. One miss ends the run.</p>
+    </section>
+  );
+}
+
+// 4×4 sliding puzzle (the classic 15-puzzle). The board is scrambled by playing
+// random legal moves backward from the solved state, so it is always solvable.
+function SlidePuzzle({ seed, persistenceKey, onComplete }: EngineProps) {
+  const scrambled = useMemo(() => {
+    const rng = createRng(`slide:${seed}`);
+    const tiles = Array.from({ length: 16 }, (_, index) => (index + 1) % 16); // 1..15, 0 = gap
+    let gap = 15;
+    let previous = -1;
+    for (let step = 0; step < 220; step++) {
+      const column = gap % 4;
+      const candidates = [
+        gap - 4,
+        gap + 4,
+        column > 0 ? gap - 1 : -1,
+        column < 3 ? gap + 1 : -1,
+      ].filter((cell) => cell >= 0 && cell <= 15 && cell !== previous);
+      const pick = candidates[Math.floor(rng() * candidates.length)];
+      tiles[gap] = tiles[pick];
+      tiles[pick] = 0;
+      previous = gap;
+      gap = pick;
+    }
+    return tiles;
+  }, [seed]);
+  const [state, setState] = useStoredGameState(persistenceKey, { tiles: scrambled, moves: 0 });
+
+  const slide = (index: number) => {
+    const gap = state.tiles.indexOf(0);
+    const rowDistance = Math.abs(Math.floor(index / 4) - Math.floor(gap / 4));
+    const columnDistance = Math.abs((index % 4) - (gap % 4));
+    if (rowDistance + columnDistance !== 1) return; // not adjacent to the gap
+    const tiles = [...state.tiles];
+    tiles[gap] = tiles[index];
+    tiles[index] = 0;
+    const moves = state.moves + 1;
+    if (tiles.every((tile, cell) => tile === (cell + 1) % 16)) {
+      onComplete({ rawScore: Math.max(250, 1000 - Math.max(0, moves - 80) * 5), summary: `Rebuilt the 4×4 puzzle in ${moves} moves.` });
+      return;
+    }
+    setState({ tiles, moves });
+  };
+
+  return (
+    <section className="engine-board engine-board--slide" aria-labelledby="slide-title">
+      <div className="engine-progress"><span>Shipwreck slide</span><span>{state.moves} moves</span></div>
+      <h2 id="slide-title">Slide the tiles back into order.</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, width: '100%', maxWidth: 340, margin: '0 auto' }} role="grid" aria-label="Sliding puzzle board">
+        {state.tiles.map((tile, index) => tile === 0 ? (
+          <span key="gap" aria-label="Empty space" style={{ aspectRatio: '1', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: '1px dashed rgba(255,255,255,0.15)' }} />
+        ) : (
+          <button key={tile} type="button" onClick={() => slide(index)} aria-label={`Tile ${tile}`}
+            style={{ aspectRatio: '1', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 24, fontWeight: 700, background: 'linear-gradient(180deg, #f0d9b5, #d9b98c)', color: '#3a2a1a' }}>
+            {tile}
+          </button>
+        ))}
+      </div>
+      <p className="engine-penalty">Arrange 1–15 in reading order with the gap in the last corner. Fewer moves score higher.</p>
+      <div className="engine-actions">
+        <button type="button" className="button button--ghost" onClick={() => onComplete({ rawScore: 0, summary: 'Skipped the sliding puzzle.' })}>Skip (no points)</button>
+      </div>
     </section>
   );
 }
@@ -794,21 +690,14 @@ function ChessPuzzleRush({ seed, onComplete }: EngineProps) {
 
 export function GameEngine({ slug, ...props }: EngineProps & { slug: string }) {
   switch (slug) {
-    case 'fire-signal-cipher': return <FireSignalCipher {...props} />;
     case 'strategy-trivia': return <ChoiceEngine {...props} questions={TRIVIA_QUESTIONS} kicker="Survivor history" />;
-    case 'idol-lockbox': return <IdolLockbox {...props} />;
-    case 'torchlight-labyrinth': return <TorchlightLabyrinth {...props} />;
     case 'memory-totem': return <MemoryTotem {...props} />;
     case 'island-coordinates': return <IslandCoordinates {...props} />;
-    case 'chain-reaction': return <ChainReaction {...props} />;
-    case 'supply-drop': return <SupplyDrop {...props} />;
     case 'risk-the-flame': return <RiskTheFlame {...props} />;
-    case 'tribal-pulse': return <ChoiceEngine {...props} questions={TRIBAL_PULSE_QUESTIONS} kicker="Majority prediction" />;
     case 'oath-of-attention': return <OathOfAttention {...props} />;
-    case 'survivor-gauntlet': return <SurvivorGauntlet {...props} />;
     case 'command-from-camp': return <CommandFromCamp {...props} />;
     case 'vault-lock': return <VaultLock {...props} />;
-    case 'riddle-trials': return <RiddleTrials {...props} />;
+    case 'slide-puzzle': return <SlidePuzzle {...props} />;
     case 'puzzle-rush': return <ChessPuzzleRush {...props} />;
     default: return null;
   }
