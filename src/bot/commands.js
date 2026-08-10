@@ -2,7 +2,7 @@ import { getCurrentGame, normalizeGameCode, requireGame, supabase, userCanManage
 import {
   getGameState, updateGameState, mergeGameState, getPlayers, alivePlayers, startGame,
   resolveImmunity, narrateChallengeResults, tallyElimination, eliminatePlayer,
-  narrateTribalCouncil, tallyJury, crownWinner, narrateWinner,
+  narrateTribalCouncil, tallyJury, crownWinner,
 } from './referee.js';
 import { CHALLENGE_CHOICES, getChallengeName } from './challenges.js';
 import { GIFS } from './gifs.js';
@@ -634,17 +634,21 @@ export async function handleRevealVotes(interaction) {
   }
 
   const winnerName = playerMap.get(result.winner) || 'the winner';
+  // 2nd/3rd by jury-vote count; a zero-vote finalist still gets a placement.
+  const finalistIds = alivePlayers(players).map((p) => p.discord_id);
   const ordered = result.votes.map(([id]) => id).filter((id) => id !== result.winner);
-  if (ordered[0]) await supabase.from('players').update({ placement: 2 }).eq('game_id', game.id).eq('discord_id', ordered[0]);
-  if (ordered[1]) await supabase.from('players').update({ placement: 3 }).eq('game_id', game.id).eq('discord_id', ordered[1]);
+  const runnerUpId = ordered[0] ?? finalistIds.find((id) => id !== result.winner);
+  const thirdId = ordered[1] ?? finalistIds.find((id) => id !== result.winner && id !== runnerUpId);
+  if (runnerUpId) await supabase.from('players').update({ placement: 2 }).eq('game_id', game.id).eq('discord_id', runnerUpId);
+  if (thirdId) await supabase.from('players').update({ placement: 3 }).eq('game_id', game.id).eq('discord_id', thirdId);
   await crownWinner(game.id, result.winner);
   await supabase.from('games').update({ status: 'ended', ended_at: new Date().toISOString() }).eq('id', game.id);
 
-  const board = result.votes.map(([id, c]) => `${playerMap.get(id) || 'Unknown'}: ${c} vote${c > 1 ? 's' : ''}`).join('\n');
-  const narration = await narrateWinner(winnerName, board);
-  let msg = `🏆 **THE FINALE**\n\n${narration}\n\n**Final jury vote:**\n`;
+  let msg = `🏆 **THE FINALE**\n\n**Final jury vote:**\n`;
   result.votes.forEach(([id, c]) => { msg += `• ${playerMap.get(id) || 'Unknown'}: ${c} vote${c > 1 ? 's' : ''}${id === result.winner ? ' 👑' : ''}\n`; });
-  msg += `\n**${winnerName} is the Sole Survivor.** 🔥`;
+  msg += `\n🥇 **${winnerName} is the Sole Survivor.** 🔥`;
+  if (runnerUpId) msg += `\n🥈 Runner-up: **${playerMap.get(runnerUpId) || 'Unknown'}**`;
+  if (thirdId) msg += `\n🥉 Third place: **${playerMap.get(thirdId) || 'Unknown'}**`;
   await post(interaction.guild, CH.tribal, msg);
   await post(interaction.guild, CH.announcements, `🏆 **${winnerName}** has won Survivor Fantasy League!`);
   await interaction.editReply(msg);
