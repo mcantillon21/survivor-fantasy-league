@@ -361,13 +361,13 @@ export async function handleChallenge(interaction) {
 
   const selected = interaction.options.getString('game');
   const slug = selected || CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
-  await updateGameState(game.id, { active_challenge: slug });
+  await updateGameState(game.id, { active_challenge: slug, challenge_posted_at: new Date().toISOString() });
   const teamLine = state.phase === 'tribe'
     ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
     : 'Every player for themselves. Only the top scorer is safe.';
 
   await post(interaction.guild, CH.lobby,
-    `🔥 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\nYou have 10 minutes.`);
+    `🔥 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\n${CHALLENGE_DEADLINE_LINE}`);
   await postGif(interaction.guild, CH.lobby, 'immunity'); // "Immunity is back up for grabs."
   await interaction.reply({ content: `${getChallengeName(slug)} posted to #${CH.lobby}.`, ephemeral: true });
 }
@@ -375,14 +375,11 @@ export async function handleChallenge(interaction) {
 // ---------------------------------------------------------------------------
 // /results — (host) tally scores, grant immunity, name the losing tribe
 // ---------------------------------------------------------------------------
-export async function handleResults(interaction) {
-  if (!(await hostOnly(interaction))) return;
-  await interaction.deferReply();
-  const game = await getCurrentGame(interaction.guildId);
-  if (!game) { await interaction.editReply('No active season.'); return; }
-
+// Core of the results reveal — shared by /results (manual backup) and the
+// scheduler's auto-reveal. Returns null when no scores exist yet.
+export async function revealResults(guild, game) {
   const summary = await resolveImmunity(game.id);
-  if (summary.empty) { await interaction.editReply('No challenge results yet.'); return; }
+  if (summary.empty) return null;
 
   const narration = await narrateChallengeResults(summary);
   let msg = `🔥 **CHALLENGE RESULTS**\n\n${narration}\n\n`;
@@ -395,15 +392,30 @@ export async function handleResults(interaction) {
     const loseLabel = tribeLabel(losingKey, state.tribe_names);
     msg += '**Tribe scores:**\n';
     summary.tribeTotals.forEach(([t, n], i) => { msg += `${i === 0 ? '🥇' : '•'} ${tribeLabel(t, state.tribe_names)}: ${n} points${t === winning ? ' 🛡️ IMMUNE' : ' — Tribal Council'}\n`; });
-    await post(interaction.guild, CH.lobby, `🏆 **${winLabel}** wins immunity!\n**${loseLabel}** has the fewest points and is going to Tribal Council. Head to #${CH.tribal} and \`/vote\` — own tribe only, votes stay secret.`);
+    await post(guild, CH.lobby, `🏆 **${winLabel}** wins immunity!\n**${loseLabel}** has the fewest points and is going to Tribal Council. Head to #${CH.tribal} and \`/vote\` — own tribe only, votes stay secret.`);
   } else {
     msg += '**Scores:**\n';
     summary.ranked.forEach((r, i) => { msg += `${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '•'} ${r.player_id}: ${r.score} points${i === 0 ? ' 🛡️ IMMUNE' : ''}\n`; });
-    await post(interaction.guild, CH.lobby, `🛡️ **${summary.winner}** wins individual immunity! Everyone else — #${CH.tribal} and \`/vote\`. You cannot vote for ${summary.winner}.`);
+    await post(guild, CH.lobby, `🛡️ **${summary.winner}** wins individual immunity! Everyone else — #${CH.tribal} and \`/vote\`. You cannot vote for ${summary.winner}.`);
   }
-  await post(interaction.guild, CH.tribal, '⚖️ **Tribal Council is now in session.** Cast your `/vote`.');
-  await postGif(interaction.guild, CH.tribal, 'tribalStart'); // "Well, let's get into it."
-  await interaction.editReply(msg);
+  await post(guild, CH.lobby, msg);
+  await post(guild, CH.tribal, '⚖️ **Tribal Council is now in session.** Cast your `/vote`.');
+  await postGif(guild, CH.tribal, 'tribalStart'); // "Well, let's get into it."
+  // Clearing the timestamp marks this round's results as revealed, so the
+  // scheduler's auto-reveal cannot fire twice.
+  await updateGameState(game.id, { challenge_posted_at: null });
+  return msg;
+}
+
+export async function handleResults(interaction) {
+  if (!(await hostOnly(interaction))) return;
+  await interaction.deferReply({ ephemeral: true });
+  const game = await getCurrentGame(interaction.guildId);
+  if (!game) { await interaction.editReply('No active season.'); return; }
+
+  const msg = await revealResults(interaction.guild, game);
+  if (!msg) { await interaction.editReply('No challenge results yet.'); return; }
+  await interaction.editReply(`Results revealed in #${CH.lobby}.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -854,13 +866,15 @@ export async function handleStandings(interaction) {
 const CHALLENGE_INTERVAL_MS = 48 * 60 * 60 * 1000;
 
 // Draw and announce a challenge for one game. Returns true if one was posted.
+const CHALLENGE_DEADLINE_LINE = 'Results reveal the moment every castaway has played — or in 24 hours, whichever comes first. Then the vote begins.';
+
 export async function postChallengeForGame(client, game) {
   const state = await getGameState(game.id);
   if (!state || !['tribe', 'individual'].includes(state.phase)) return false; // skip final/ended/setup
   if (state.active_challenge) return false; // never replace an official challenge mid-round
 
   const slug = CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
-  await updateGameState(game.id, { active_challenge: slug });
+  await updateGameState(game.id, { active_challenge: slug, challenge_posted_at: new Date().toISOString() });
 
   const guild = game.discord_guild_id ? client.guilds.cache.get(game.discord_guild_id) : null;
   if (!guild) return false;
@@ -868,8 +882,39 @@ export async function postChallengeForGame(client, game) {
     ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
     : 'Every player for themselves. Only the top scorer is safe.';
   await post(guild, CH.lobby,
-    `🌙 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge`);
+    `🌙 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\n${CHALLENGE_DEADLINE_LINE}`);
   return true;
+}
+
+// Auto-reveal: results post the moment every living player has submitted a
+// score, or 24h after the challenge dropped — whichever comes first. This
+// gives the game its alternate-day rhythm: challenge day, then vote day.
+const RESULTS_DEADLINE_MS = 24 * 60 * 60 * 1000;
+
+async function maybeAutoRevealResults(client, game, now) {
+  const state = await getGameState(game.id);
+  if (!state?.active_challenge || !state.challenge_posted_at) return;
+  if (!['tribe', 'individual'].includes(state.phase)) return;
+
+  const alive = alivePlayers(await getPlayers(game.id));
+  if (!alive.length) return;
+  const { data: rows } = await supabase.from('challenges')
+    .select('player_id').eq('game_id', game.id).eq('round', state.current_round);
+  const submitted = new Set((rows || []).map((r) => r.player_id));
+  const everyoneIn = alive.every((p) => submitted.has(p.username));
+  const deadline = new Date(state.challenge_posted_at).getTime() + RESULTS_DEADLINE_MS;
+  if (!everyoneIn && now < deadline) return;
+
+  const guild = game.discord_guild_id ? client.guilds.cache.get(game.discord_guild_id) : null;
+  if (!guild) return;
+  const msg = await revealResults(guild, game);
+  if (msg) {
+    console.log(`⏰ Results auto-revealed for ${game.code} (${everyoneIn ? 'everyone played' : '24h deadline'})`);
+  } else {
+    // Deadline hit with zero scores — keep the challenge open another day.
+    await post(guild, CH.lobby, '⏳ Nobody has played the challenge yet — it stays open for another day.');
+    await updateGameState(game.id, { challenge_posted_at: new Date(now).toISOString() });
+  }
 }
 
 export function startChallengeScheduler(client) {
@@ -892,6 +937,7 @@ export function startChallengeScheduler(client) {
           const posted = await postChallengeForGame(client, game);
           if (posted) console.log(`⏰ Challenge dropped for ${game.code} (day ${after * 2})`);
         }
+        await maybeAutoRevealResults(client, game, now);
       }
     } catch (e) { console.error('Scheduled challenge failed:', e.message); }
     lastTick = now;
