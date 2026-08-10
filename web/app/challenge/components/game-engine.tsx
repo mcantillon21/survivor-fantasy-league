@@ -592,7 +592,8 @@ function ChessPuzzleRush({ seed, onComplete }: EngineProps) {
     const points = s.m1 + s.m2 * 2 + s.m3 * 3;
     const total = s.m1 + s.m2 + s.m3;
     onComplete({
-      rawScore: Math.min(1000, Math.round((points / 15) * 1000)),
+      // Uncapped on purpose: 15 points = 1000, and strong runs keep climbing.
+      rawScore: Math.round((points / 15) * 1000),
       summary: `${total} puzzle${total === 1 ? '' : 's'} solved in 5 minutes (${s.m1}× mate-in-1, ${s.m2}× mate-in-2, ${s.m3}× mate-in-3).`,
     });
   }, [onComplete]);
