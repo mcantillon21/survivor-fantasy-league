@@ -7,6 +7,13 @@ export const CHALLENGE_CHOICES = [
   { name: 'Vault Lock', value: 'vault-lock' },
   { name: 'Shipwreck Slide', value: 'slide-puzzle' },
   { name: 'Puzzle Rush', value: 'puzzle-rush' },
+  { name: 'Tower of the Idols', value: 'tower-of-idols' },
+  { name: 'Torch Scramble', value: 'torch-scramble' },
+  { name: 'Camp Transcription', value: 'torch-transcription' },
+  { name: 'Jungle Word Hunt', value: 'jungle-word-hunt' },
+  { name: 'Coconut 2048', value: 'island-2048' },
+  { name: 'Buried Idols', value: 'buried-idols' },
+  { name: 'Supply Count', value: 'supply-count' },
 ];
 
 // Archived challenges: out of the draw, but old rounds may still reference them.

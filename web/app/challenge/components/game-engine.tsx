@@ -716,6 +716,515 @@ function ChessPuzzleRush({ seed, onComplete }: EngineProps) {
   );
 }
 
+// --- Shared word bank for the word challenges --------------------------------
+const SURVIVOR_WORDS = ['SURVIVOR', 'IMMUNITY', 'ALLIANCE', 'BLINDSIDE', 'CASTAWAY', 'CHALLENGE', 'OUTLAST', 'ISLAND', 'COUNCIL', 'TORCH'];
+
+// Tower of Hanoi: move all six discs to the right peg. Optimal is 63 moves.
+function TowerOfIdols({ persistenceKey, onComplete }: EngineProps) {
+  const DISCS = 6;
+  const OPTIMAL = 63;
+  const [state, setState] = useStoredGameState<{ pegs: number[][]; moves: number }>(persistenceKey, {
+    pegs: [Array.from({ length: DISCS }, (_, i) => DISCS - i), [], []],
+    moves: 0,
+  });
+  const [from, setFrom] = useState<number | null>(null);
+
+  const tap = (peg: number) => {
+    if (from === null) {
+      if (state.pegs[peg].length) setFrom(peg);
+      return;
+    }
+    if (from === peg) { setFrom(null); return; }
+    const disc = state.pegs[from][state.pegs[from].length - 1];
+    const target = state.pegs[peg][state.pegs[peg].length - 1];
+    if (target !== undefined && target < disc) { setFrom(null); return; } // bigger on smaller — illegal
+    const pegs = state.pegs.map((p) => [...p]);
+    pegs[peg].push(pegs[from].pop()!);
+    const moves = state.moves + 1;
+    setFrom(null);
+    if (pegs[2].length === DISCS) {
+      onComplete({ rawScore: Math.max(250, 1000 - Math.max(0, moves - OPTIMAL) * 10), summary: `Rebuilt the idol tower in ${moves} moves (optimal is ${OPTIMAL}).` });
+      return;
+    }
+    setState({ pegs, moves });
+  };
+
+  return (
+    <section className="engine-board engine-board--hanoi" aria-labelledby="hanoi-title">
+      <div className="engine-progress"><span>Tower of the Idols</span><span>{state.moves} moves</span></div>
+      <h2 id="hanoi-title">Move the whole tower to the right pillar.</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, alignItems: 'end', maxWidth: 480, margin: '0 auto', width: '100%' }}>
+        {state.pegs.map((peg, pegIndex) => (
+          <button key={pegIndex} type="button" onClick={() => tap(pegIndex)} aria-label={`Pillar ${pegIndex + 1}, ${peg.length} discs`}
+            style={{ background: from === pegIndex ? 'rgba(255,160,60,0.12)' : 'rgba(255,255,255,0.03)', border: from === pegIndex ? '1px solid rgba(255,160,60,0.6)' : '1px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: '10px 4px 12px', cursor: 'pointer', minHeight: 190, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center', gap: 4 }}>
+            {[...peg].reverse().map((disc) => (
+              <span key={disc} style={{ display: 'block', height: 16, width: `${28 + disc * 12}%`, borderRadius: 8, background: 'linear-gradient(180deg, #f0d9b5, #c9995f)' }} />
+            ))}
+            <span style={{ width: '85%', height: 4, background: 'rgba(255,255,255,0.25)', borderRadius: 2, marginTop: 6 }} />
+          </button>
+        ))}
+      </div>
+      <p className="engine-penalty">Tap a pillar to lift its top disc, then tap another to drop it. A bigger disc never sits on a smaller one. Fewer moves score higher.</p>
+      <div className="engine-actions">
+        <button type="button" className="button button--ghost" onClick={() => onComplete({ rawScore: 0, summary: 'Skipped the tower.' })}>Skip (no points)</button>
+      </div>
+    </section>
+  );
+}
+
+// Word Unscramble: ten scrambled Survivor words, typed answers.
+function TorchScramble({ seed, persistenceKey, onComplete }: EngineProps) {
+  const words = useMemo(() => shuffleSeeded(SURVIVOR_WORDS, `scramble:${seed}`), [seed]);
+  const scrambles = useMemo(() => words.map((word, index) => {
+    let letters = shuffleSeeded(word.split(''), `letters:${seed}:${index}`);
+    if (letters.join('') === word) letters = [...letters.slice(1), letters[0]];
+    return letters.join(' ');
+  }), [seed, words]);
+  const [state, setState] = useStoredGameState(persistenceKey, { index: 0, solved: 0, mistakes: 0 });
+  const [value, setValue] = useState('');
+  const [error, setError] = useState('');
+
+  const advance = (didSolve: boolean, mistakes = state.mistakes) => {
+    const solved = state.solved + (didSolve ? 1 : 0);
+    if (state.index === words.length - 1) {
+      onComplete({ rawScore: Math.max(0, Math.round((solved / words.length) * 1000) - mistakes * 15), summary: `Unscrambled ${solved} of ${words.length} words with ${mistakes} wrong guesses.` });
+      return;
+    }
+    setState({ index: state.index + 1, solved, mistakes });
+    setValue('');
+    setError('');
+  };
+
+  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (value.trim().toUpperCase().replace(/[^A-Z]/g, '') !== words[state.index]) {
+      setState({ ...state, mistakes: state.mistakes + 1 });
+      setError('Not quite — try again or skip it.');
+      return;
+    }
+    advance(true);
+  };
+
+  return (
+    <section className="engine-board engine-board--scramble" aria-labelledby="scramble-title">
+      <div className="engine-progress"><span>Torch Scramble</span><span>{state.index + 1} / {words.length} · {state.solved} solved</span></div>
+      <h2 id="scramble-title">Unscramble the island word.</h2>
+      <div className="cipher-strip" aria-label="Scrambled word">{scrambles[state.index]}</div>
+      <form className="puzzle-answer" onSubmit={submit} noValidate>
+        <label htmlFor="scramble-answer">Your answer</label>
+        <div><input id="scramble-answer" value={value} onChange={(event) => { setValue(event.target.value); setError(''); }} autoComplete="off" spellCheck="false" /><button className="button button--primary" type="submit">Unscramble</button></div>
+        {error && <p className="field-error" role="alert">{error}</p>}
+      </form>
+      <div className="engine-actions">
+        <button type="button" className="button button--ghost" onClick={() => advance(false)}>Skip this word (no points)</button>
+      </div>
+      <p className="engine-penalty">Wrong guesses cost 15 points each.</p>
+    </section>
+  );
+}
+
+// Retyping challenge: copy the passage exactly. Paste is blocked.
+const TRANSCRIPTION_PASSAGE = 'Thirty-nine days, one survivor. The rain has soaked every ember, the rice is nearly gone, and somewhere on this beach an idol is still buried. Dig deep, trust carefully, and never turn your back on the fire.';
+
+function TorchTranscription({ onComplete }: EngineProps) {
+  const [value, setValue] = useState('');
+
+  const submit = () => {
+    const target = TRANSCRIPTION_PASSAGE;
+    let correct = 0;
+    for (let i = 0; i < Math.min(value.length, target.length); i++) {
+      if (value[i] === target[i]) correct++;
+    }
+    const overrun = Math.max(0, value.length - target.length);
+    const rawScore = Math.max(0, Math.round(((correct - overrun) / target.length) * 1000));
+    onComplete({ rawScore, summary: `${correct} of ${target.length} characters matched exactly.` });
+  };
+
+  return (
+    <section className="engine-board engine-board--transcribe" aria-labelledby="transcribe-title">
+      <div className="engine-progress"><span>Camp transcription</span><span>{value.length} / {TRANSCRIPTION_PASSAGE.length} chars</span></div>
+      <h2 id="transcribe-title">Retype the message exactly — every letter, space, and comma.</h2>
+      <div className="cipher-strip" aria-label="Passage to retype" style={{ userSelect: 'none' }}>{TRANSCRIPTION_PASSAGE}</div>
+      <textarea
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onPaste={(event) => event.preventDefault()}
+        onDrop={(event) => event.preventDefault()}
+        rows={4}
+        autoComplete="off"
+        spellCheck="false"
+        aria-label="Type the passage here"
+        style={{ width: '100%', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, color: 'inherit', font: 'inherit', padding: '12px 14px', marginTop: 12 }}
+      />
+      <p className="engine-penalty">Pasting is disabled. Accuracy earns points; the clock eats them — type fast, type true.</p>
+      <div className="engine-actions">
+        <button type="button" className="button button--primary" onClick={submit}>Submit transcription</button>
+      </div>
+    </section>
+  );
+}
+
+// Word search: find the hidden words in a seeded 10x10 grid.
+const WORD_HUNT_WORDS = ['IMMUNITY', 'ALLIANCE', 'BLINDSIDE', 'CASTAWAY', 'TRIBAL', 'MERGE', 'TORCH', 'JURY'];
+const HUNT_SIZE = 10;
+const HUNT_DIRS: [number, number][] = [[0, 1], [1, 0], [1, 1], [1, -1], [0, -1], [-1, 0], [-1, -1], [-1, 1]];
+
+function buildWordHunt(seed: string) {
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const rng = createRng(`hunt:${seed}:${attempt}`);
+    const grid: (string | null)[][] = Array.from({ length: HUNT_SIZE }, () => Array(HUNT_SIZE).fill(null));
+    const placed: { word: string; cells: [number, number][] }[] = [];
+    let ok = true;
+    for (const word of [...WORD_HUNT_WORDS].sort((a, b) => b.length - a.length)) {
+      let done = false;
+      for (let t = 0; t < 120 && !done; t++) {
+        const dir = HUNT_DIRS[Math.floor(rng() * HUNT_DIRS.length)];
+        const row = Math.floor(rng() * HUNT_SIZE);
+        const col = Math.floor(rng() * HUNT_SIZE);
+        const endRow = row + dir[0] * (word.length - 1);
+        const endCol = col + dir[1] * (word.length - 1);
+        if (endRow < 0 || endRow >= HUNT_SIZE || endCol < 0 || endCol >= HUNT_SIZE) continue;
+        const cells: [number, number][] = [];
+        let fits = true;
+        for (let i = 0; i < word.length; i++) {
+          const r = row + dir[0] * i;
+          const c = col + dir[1] * i;
+          if (grid[r][c] !== null && grid[r][c] !== word[i]) { fits = false; break; }
+          cells.push([r, c]);
+        }
+        if (!fits) continue;
+        cells.forEach(([r, c], i) => { grid[r][c] = word[i]; });
+        placed.push({ word, cells });
+        done = true;
+      }
+      if (!done) { ok = false; break; }
+    }
+    if (!ok) continue;
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const filled = grid.map((row) => row.map((cell) => cell ?? alphabet[Math.floor(rng() * 26)]));
+    return { grid: filled, placed };
+  }
+  // Practically unreachable — 30 seeded layouts always fit these eight words.
+  return { grid: Array.from({ length: HUNT_SIZE }, () => Array(HUNT_SIZE).fill('A')), placed: [] };
+}
+
+function JungleWordHunt({ seed, persistenceKey, onComplete }: EngineProps) {
+  const { grid, placed } = useMemo(() => buildWordHunt(seed), [seed]);
+  const [found, setFound] = useStoredGameState<string[]>(persistenceKey, []);
+  const [anchor, setAnchor] = useState<[number, number] | null>(null);
+
+  const foundCells = useMemo(() => {
+    const set = new Set<string>();
+    placed.filter((p) => found.includes(p.word)).forEach((p) => p.cells.forEach(([r, c]) => set.add(`${r},${c}`)));
+    return set;
+  }, [found, placed]);
+
+  const finish = (words: string[]) => {
+    onComplete({ rawScore: Math.round((words.length / WORD_HUNT_WORDS.length) * 1000), summary: `Found ${words.length} of ${WORD_HUNT_WORDS.length} hidden words.` });
+  };
+
+  const tap = (row: number, col: number) => {
+    if (!anchor) { setAnchor([row, col]); return; }
+    const [ar, ac] = anchor;
+    setAnchor(null);
+    if (ar === row && ac === col) return;
+    const dr = Math.sign(row - ar);
+    const dc = Math.sign(col - ac);
+    const steps = Math.max(Math.abs(row - ar), Math.abs(col - ac));
+    if (!((ar + dr * steps === row) && (ac + dc * steps === col))) return; // not a straight line
+    let text = '';
+    for (let i = 0; i <= steps; i++) text += grid[ar + dr * i][ac + dc * i];
+    const reversed = [...text].reverse().join('');
+    const hit = placed.find((p) => (p.word === text || p.word === reversed) && !found.includes(p.word));
+    if (!hit) return;
+    const words = [...found, hit.word];
+    setFound(words);
+    if (words.length === WORD_HUNT_WORDS.length) finish(words);
+  };
+
+  return (
+    <section className="engine-board engine-board--hunt" aria-labelledby="hunt-title">
+      <div className="engine-progress"><span>Jungle word hunt</span><span>{found.length} / {WORD_HUNT_WORDS.length} found</span></div>
+      <h2 id="hunt-title">Find the hidden words.</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${HUNT_SIZE}, 1fr)`, gap: 3, maxWidth: 420, margin: '0 auto', width: '100%' }} role="grid" aria-label="Word search grid">
+        {grid.flatMap((rowCells, row) => rowCells.map((letter, col) => {
+          const key = `${row},${col}`;
+          const isAnchor = anchor?.[0] === row && anchor?.[1] === col;
+          const isFound = foundCells.has(key);
+          return (
+            <button key={key} type="button" onClick={() => tap(row, col)} aria-label={`${letter} at row ${row + 1} column ${col + 1}`}
+              style={{ aspectRatio: '1', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 700, fontSize: 15, background: isAnchor ? '#f4f169' : isFound ? 'rgba(120,220,140,0.35)' : 'rgba(255,255,255,0.06)', color: isAnchor ? '#222' : 'inherit' }}>
+              {letter}
+            </button>
+          );
+        }))}
+      </div>
+      <p className="engine-penalty">Tap a word&apos;s first letter, then its last letter. Words run in any straight line, forward or backward. Still hidden: {WORD_HUNT_WORDS.filter((w) => !found.includes(w)).join(', ') || 'none'}.</p>
+      <div className="engine-actions">
+        <button type="button" className="button button--ghost" onClick={() => finish(found)}>Finish with what I found</button>
+      </div>
+    </section>
+  );
+}
+
+// 2048, island edition. Seeded spawns; bank your score any time.
+function Island2048({ seed, onComplete }: EngineProps) {
+  const rngRef = useRef(createRng(`2048:${seed}`));
+  const spawn = useCallback((board: number[]) => {
+    const empty = board.map((v, i) => (v === 0 ? i : -1)).filter((i) => i >= 0);
+    if (!empty.length) return board;
+    const next = [...board];
+    next[empty[Math.floor(rngRef.current() * empty.length)]] = rngRef.current() < 0.9 ? 2 : 4;
+    return next;
+  }, []);
+  const [board, setBoard] = useState<number[]>(() => spawn(spawn(Array(16).fill(0))));
+  const [score, setScore] = useState(0);
+  const doneRef = useRef(false);
+
+  const finish = useCallback((finalScore: number, why: string) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onComplete({ rawScore: Math.min(1000, Math.round((finalScore / 20000) * 1000)), summary: `${why} with ${finalScore} points (20,000 points = a perfect score).` });
+  }, [onComplete]);
+
+  const move = useCallback((dir: 'up' | 'down' | 'left' | 'right') => {
+    if (doneRef.current) return;
+    const get = (r: number, c: number) => {
+      if (dir === 'left') return board[r * 4 + c];
+      if (dir === 'right') return board[r * 4 + (3 - c)];
+      if (dir === 'up') return board[c * 4 + r];
+      return board[(3 - c) * 4 + r];
+    };
+    const set = (next: number[], r: number, c: number, v: number) => {
+      if (dir === 'left') next[r * 4 + c] = v;
+      else if (dir === 'right') next[r * 4 + (3 - c)] = v;
+      else if (dir === 'up') next[c * 4 + r] = v;
+      else next[(3 - c) * 4 + r] = v;
+    };
+    const next = Array(16).fill(0);
+    let gained = 0;
+    let changed = false;
+    for (let r = 0; r < 4; r++) {
+      const line = [0, 1, 2, 3].map((c) => get(r, c)).filter((v) => v !== 0);
+      const merged: number[] = [];
+      for (let i = 0; i < line.length; i++) {
+        if (i + 1 < line.length && line[i] === line[i + 1]) {
+          merged.push(line[i] * 2);
+          gained += line[i] * 2;
+          i++;
+        } else merged.push(line[i]);
+      }
+      merged.forEach((v, c) => set(next, r, c, v));
+      for (let c = 0; c < 4; c++) if (get(r, c) !== next[(dir === 'left') ? r * 4 + c : (dir === 'right') ? r * 4 + (3 - c) : (dir === 'up') ? c * 4 + r : (3 - c) * 4 + r]) changed = true;
+    }
+    if (!changed) return;
+    const spawned = spawn(next);
+    const total = score + gained;
+    setBoard(spawned);
+    setScore(total);
+    const anyMove = spawned.includes(0) || spawned.some((v, i) => {
+      const r = Math.floor(i / 4); const c = i % 4;
+      return (c < 3 && spawned[i + 1] === v) || (r < 3 && spawned[i + 4] === v);
+    });
+    if (!anyMove) finish(total, 'No moves left');
+  }, [board, finish, score, spawn]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const map: Record<string, 'up' | 'down' | 'left' | 'right'> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
+      const dir = map[event.key];
+      if (dir) { event.preventDefault(); move(dir); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [move]);
+
+  const TILE_BG: Record<number, string> = { 2: '#efe4d2', 4: '#ecd9b3', 8: '#f2b179', 16: '#f59563', 32: '#f67c5f', 64: '#f65e3b', 128: '#edcf72', 256: '#edcc61', 512: '#edc850', 1024: '#edc53f', 2048: '#edc22e' };
+
+  return (
+    <section className="engine-board engine-board--2048" aria-labelledby="c2048-title">
+      <div className="engine-progress"><span>Coconut 2048</span><span>{score} points</span></div>
+      <h2 id="c2048-title">Merge the tiles. Bank before you jam the board.</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6, maxWidth: 340, margin: '0 auto', width: '100%' }} role="grid" aria-label="2048 board">
+        {board.map((v, i) => (
+          <span key={i} style={{ aspectRatio: '1', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: v >= 1024 ? 16 : 20, background: v ? (TILE_BG[v] ?? '#3c3a32') : 'rgba(255,255,255,0.05)', color: v >= 8 ? '#fff' : '#494036' }}>
+            {v || ''}
+          </span>
+        ))}
+      </div>
+      <div className="maze-controls" aria-label="Movement controls" style={{ marginTop: 12 }}>
+        <button type="button" aria-label="Up" onClick={() => move('up')}>↑</button>
+        <button type="button" aria-label="Left" onClick={() => move('left')}>←</button>
+        <button type="button" aria-label="Down" onClick={() => move('down')}>↓</button>
+        <button type="button" aria-label="Right" onClick={() => move('right')}>→</button>
+      </div>
+      <p className="engine-penalty">Arrow keys or buttons. Equal tiles merge and score their sum. 20,000 points is a perfect 1000.</p>
+      <div className="engine-actions">
+        <button type="button" className="button button--primary" onClick={() => finish(score, 'Banked')}>Bank my score</button>
+      </div>
+    </section>
+  );
+}
+
+// Minesweeper: clear the beach without digging up a trapped idol.
+function BuriedIdols({ seed, onComplete }: EngineProps) {
+  const SIZE = 9;
+  const MINES = 10;
+  const { mines, counts, start } = useMemo(() => {
+    const rng = createRng(`mines:${seed}`);
+    const mineSet = new Set<number>();
+    while (mineSet.size < MINES) mineSet.add(Math.floor(rng() * SIZE * SIZE));
+    const neighbourList = (i: number) => {
+      const r = Math.floor(i / SIZE); const c = i % SIZE;
+      const out: number[] = [];
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        const nr = r + dr; const nc = c + dc;
+        if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) out.push(nr * SIZE + nc);
+      }
+      return out;
+    };
+    const countArr = Array.from({ length: SIZE * SIZE }, (_, i) => mineSet.has(i) ? -1 : neighbourList(i).filter((n) => mineSet.has(n)).length);
+    const startCell = countArr.findIndex((v) => v === 0);
+    return { mines: mineSet, counts: countArr, start: startCell >= 0 ? startCell : countArr.findIndex((v) => v >= 0) };
+  }, [seed]);
+
+  const flood = useCallback((cell: number, revealed: Set<number>) => {
+    const queue = [cell];
+    while (queue.length) {
+      const i = queue.pop()!;
+      if (revealed.has(i) || mines.has(i)) continue;
+      revealed.add(i);
+      if (counts[i] === 0) {
+        const r = Math.floor(i / SIZE); const c = i % SIZE;
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+          const nr = r + dr; const nc = c + dc;
+          if (nr >= 0 && nr < SIZE && nc >= 0 && nc < SIZE) queue.push(nr * SIZE + nc);
+        }
+      }
+    }
+    return revealed;
+  }, [counts, mines]);
+
+  const [revealed, setRevealed] = useState<Set<number>>(() => flood(start, new Set()));
+  const [flags, setFlags] = useState<Set<number>>(new Set());
+  const [flagMode, setFlagMode] = useState(false);
+  const doneRef = useRef(false);
+  const SAFE_TOTAL = SIZE * SIZE - MINES;
+
+  const finish = useCallback((cleared: number, won: boolean) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onComplete({
+      rawScore: won ? 1000 : Math.round((cleared / SAFE_TOTAL) * 700),
+      summary: won ? 'The whole beach cleared — every idol avoided.' : `Dug up a trapped idol after clearing ${cleared} of ${SAFE_TOTAL} safe squares.`,
+    });
+  }, [SAFE_TOTAL, onComplete]);
+
+  const tap = (i: number) => {
+    if (doneRef.current || revealed.has(i)) return;
+    if (flagMode) {
+      const next = new Set(flags);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      setFlags(next);
+      return;
+    }
+    if (flags.has(i)) return;
+    if (mines.has(i)) { finish(revealed.size, false); return; }
+    const next = flood(i, new Set(revealed));
+    setRevealed(next);
+    if (next.size === SAFE_TOTAL) finish(next.size, true);
+  };
+
+  const NUM_COLORS = ['', '#7fb2ff', '#8fd18f', '#ff9d7a', '#c99cff', '#ffd23f', '#7adfd4', '#eee', '#aaa'];
+
+  return (
+    <section className="engine-board engine-board--mines" aria-labelledby="mines-title">
+      <div className="engine-progress"><span>Buried idols</span><span>{revealed.size} / {SAFE_TOTAL} cleared</span></div>
+      <h2 id="mines-title">Clear the beach — ten trapped idols are buried.</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${SIZE}, 1fr)`, gap: 3, maxWidth: 400, margin: '0 auto', width: '100%' }} role="grid" aria-label="Minesweeper board">
+        {counts.map((count, i) => {
+          const isOpen = revealed.has(i);
+          return (
+            <button key={i} type="button" onClick={() => tap(i)} aria-label={isOpen ? `Cleared, ${count} adjacent` : flags.has(i) ? 'Flagged' : 'Buried'}
+              style={{ aspectRatio: '1', border: 'none', borderRadius: 5, cursor: isOpen ? 'default' : 'pointer', fontWeight: 800, fontSize: 15, background: isOpen ? 'rgba(255,255,255,0.10)' : 'rgba(240,217,181,0.22)', color: isOpen && count > 0 ? NUM_COLORS[count] : 'inherit' }}>
+              {isOpen ? (count > 0 ? count : '') : flags.has(i) ? '🚩' : ''}
+            </button>
+          );
+        })}
+      </div>
+      <div className="engine-actions">
+        <button type="button" className={`button ${flagMode ? 'button--primary' : 'button--ghost'}`} onClick={() => setFlagMode((f) => !f)} aria-pressed={flagMode}>
+          {flagMode ? '🚩 Flag mode ON' : '🚩 Flag mode off'}
+        </button>
+        <button type="button" className="button button--ghost" onClick={() => finish(revealed.size, false)}>Stop digging (keep progress)</button>
+      </div>
+      <p className="engine-penalty">Numbers count the idols in the surrounding squares. Clear every safe square for 1000; hitting an idol keeps partial credit.</p>
+    </section>
+  );
+}
+
+// Count It Out: a supply pile flashes briefly — count one item type.
+const SUPPLY_TYPES = ['🥥', '🐚', '🔥', '🍌'];
+
+function SupplyCount({ seed, persistenceKey, onComplete }: EngineProps) {
+  const ROUNDS = 5;
+  const [state, setState] = useStoredGameState(persistenceKey, { round: 0, points: 0, phase: 'look' as 'look' | 'guess' });
+  const [value, setValue] = useState('');
+
+  const round = useMemo(() => {
+    const rng = createRng(`count:${seed}:${state.round}`);
+    const total = 34 + state.round * 8;
+    const items = Array.from({ length: total }, () => SUPPLY_TYPES[Math.floor(rng() * SUPPLY_TYPES.length)]);
+    const target = SUPPLY_TYPES[Math.floor(rng() * SUPPLY_TYPES.length)];
+    return { items, target, actual: items.filter((item) => item === target).length };
+  }, [seed, state.round]);
+
+  useEffect(() => {
+    if (state.phase !== 'look') return;
+    const timer = window.setTimeout(() => setState((current) => ({ ...current, phase: 'guess' })), 5000);
+    return () => window.clearTimeout(timer);
+  }, [setState, state.phase, state.round]);
+
+  const submit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const guess = Number(value);
+    if (!Number.isFinite(guess)) return;
+    const off = Math.abs(guess - round.actual);
+    const gained = off === 0 ? 200 : off === 1 ? 140 : off === 2 ? 90 : off === 3 ? 40 : 0;
+    const points = state.points + gained;
+    setValue('');
+    if (state.round === ROUNDS - 1) {
+      onComplete({ rawScore: points, summary: `${points} counting points across ${ROUNDS} supply drops.` });
+      return;
+    }
+    setState({ round: state.round + 1, points, phase: 'look' });
+  };
+
+  return (
+    <section className="engine-board engine-board--count" aria-labelledby="count-title">
+      <div className="engine-progress"><span>Supply drop {state.round + 1} / {ROUNDS}</span><span>{state.points} points</span></div>
+      {state.phase === 'look' ? (
+        <>
+          <h2 id="count-title">Count the {round.target} — five seconds.</h2>
+          <div aria-label="Supply pile" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', maxWidth: 440, margin: '0 auto', fontSize: 24 }}>
+            {round.items.map((item, index) => <span key={index}>{item}</span>)}
+          </div>
+        </>
+      ) : (
+        <>
+          <h2 id="count-title">How many {round.target} were in the pile?</h2>
+          <form className="puzzle-answer" onSubmit={submit} noValidate>
+            <label htmlFor="count-answer">Your count</label>
+            <div><input id="count-answer" value={value} onChange={(event) => setValue(event.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" autoComplete="off" /><button className="button button--primary" type="submit">Lock it in</button></div>
+          </form>
+          <p className="engine-penalty">Exact = 200 · off by 1 = 140 · by 2 = 90 · by 3 = 40 · further = 0.</p>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function GameEngine({ slug, ...props }: EngineProps & { slug: string }) {
   switch (slug) {
     case 'strategy-trivia': return <ChoiceEngine {...props} questions={TRIVIA_QUESTIONS} kicker="Survivor history" timeLimitSeconds={300} />;
@@ -727,6 +1236,13 @@ export function GameEngine({ slug, ...props }: EngineProps & { slug: string }) {
     case 'vault-lock': return <VaultLock {...props} />;
     case 'slide-puzzle': return <SlidePuzzle {...props} />;
     case 'puzzle-rush': return <ChessPuzzleRush {...props} />;
+    case 'tower-of-idols': return <TowerOfIdols {...props} />;
+    case 'torch-scramble': return <TorchScramble {...props} />;
+    case 'torch-transcription': return <TorchTranscription {...props} />;
+    case 'jungle-word-hunt': return <JungleWordHunt {...props} />;
+    case 'island-2048': return <Island2048 {...props} />;
+    case 'buried-idols': return <BuriedIdols {...props} />;
+    case 'supply-count': return <SupplyCount {...props} />;
     default: return null;
   }
 }
