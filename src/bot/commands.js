@@ -329,10 +329,10 @@ export async function handleStart(interaction) {
     msg += `Each tribe only sees its own channel. The first immunity challenge is up in #${CH.lobby} — a new one drops every other day. Merge at ${result.mergeAt}.`;
   }
   await post(guild, CH.announcements, msg);
-  // First challenge drops immediately — the scheduler takes over every 48h from now.
-  const started = { ...game, status: 'live' };
-  await postChallengeForGame(interaction.client, started);
-  await interaction.editReply(`🌴 Season started — the roster is posted in #${CH.announcements} and the first challenge is live in #${CH.lobby}.`);
+  // The scheduler posts the first challenge at the next 5:00 PM drop time.
+  const firstDrop = nextDropTime();
+  await post(guild, CH.lobby, `🔥 The first immunity challenge drops **${fmtET(firstDrop)}** and stays open for 12 hours. Results reveal when everyone has played (or when time runs out), and Tribal Council opens at 5:00 PM ET the next day.`);
+  await interaction.editReply(`🌴 Season started — the roster is posted in #${CH.announcements}; the first challenge drops ${fmtET(firstDrop)} in #${CH.lobby}.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -361,13 +361,14 @@ export async function handleChallenge(interaction) {
 
   const selected = interaction.options.getString('game');
   const slug = selected || CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
-  await updateGameState(game.id, { active_challenge: slug, challenge_posted_at: new Date().toISOString() });
+  const sitOuts = await pickSitOuts(game.id, state);
+  await updateGameState(game.id, { active_challenge: slug, challenge_posted_at: new Date().toISOString(), sit_outs: sitOuts });
   const teamLine = state.phase === 'tribe'
     ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
     : 'Every player for themselves. Only the top scorer is safe.';
 
   await post(interaction.guild, CH.lobby,
-    `🔥 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\n${CHALLENGE_DEADLINE_LINE}`);
+    `🔥 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}${sitOutLine(sitOuts)}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\n${CHALLENGE_DEADLINE_LINE}`);
   await postGif(interaction.guild, CH.lobby, 'immunity'); // "Immunity is back up for grabs."
   await interaction.reply({ content: `${getChallengeName(slug)} posted to #${CH.lobby}.`, ephemeral: true });
 }
@@ -392,18 +393,19 @@ export async function revealResults(guild, game) {
     const loseLabel = tribeLabel(losingKey, state.tribe_names);
     msg += '**Tribe scores:**\n';
     summary.tribeTotals.forEach(([t, n], i) => { msg += `${i === 0 ? '🥇' : '•'} ${tribeLabel(t, state.tribe_names)}: ${n} points${t === winning ? ' 🛡️ IMMUNE' : ' — Tribal Council'}\n`; });
-    await post(guild, CH.lobby, `🏆 **${winLabel}** wins immunity!\n**${loseLabel}** has the fewest points and is going to Tribal Council. Head to #${CH.tribal} and \`/vote\` — own tribe only, votes stay secret.`);
+    await post(guild, CH.lobby, `🏆 **${winLabel}** wins immunity!\n**${loseLabel}** has the fewest points and is going to Tribal Council.`);
   } else {
     msg += '**Scores:**\n';
     summary.ranked.forEach((r, i) => { msg += `${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '•'} ${r.player_id}: ${r.score} points${i === 0 ? ' 🛡️ IMMUNE' : ''}\n`; });
-    await post(guild, CH.lobby, `🛡️ **${summary.winner}** wins individual immunity! Everyone else — #${CH.tribal} and \`/vote\`. You cannot vote for ${summary.winner}.`);
+    await post(guild, CH.lobby, `🛡️ **${summary.winner}** wins individual immunity! Everyone else is vulnerable tonight.`);
   }
   await post(guild, CH.lobby, msg);
-  await post(guild, CH.tribal, '⚖️ **Tribal Council is now in session.** Cast your `/vote`.');
-  await postGif(guild, CH.tribal, 'tribalStart'); // "Well, let's get into it."
+  // Tribal opens at the next 5:00 PM drop time and runs for 12 hours.
+  const opens = nextDropTime();
+  await post(guild, CH.tribal, `⚖️ **Tribal Council opens ${fmtET(opens)}** and stays open for 12 hours. Votes are cast with \`/vote\` once it opens.`);
   // Clearing the timestamp marks this round's results as revealed, so the
   // scheduler's auto-reveal cannot fire twice.
-  await updateGameState(game.id, { challenge_posted_at: null });
+  await updateGameState(game.id, { challenge_posted_at: null, tribal_opens_at: opens.toISOString(), tribal_closes_at: null });
   return msg;
 }
 
@@ -449,7 +451,14 @@ export async function handleVote(interaction) {
     .eq('game_id', game.id)
     .eq('is_eliminated', false)
     .eq('has_immunity', true);
-  if (!immuneCount) { await interaction.reply({ content: 'Voting is not open yet. Wait for the host to post `/results`.', ephemeral: true }); return; }
+  if (!immuneCount) { await interaction.reply({ content: 'Voting is not open yet — the challenge results have not been revealed.', ephemeral: true }); return; }
+  // Tribal has a fixed window: opens 5pm ET, closes 12h later.
+  const tribalOpen = state.tribal_closes_at && Date.now() < new Date(state.tribal_closes_at).getTime();
+  if (!tribalOpen) {
+    const opens = state.tribal_opens_at && !state.tribal_closes_at ? ` It opens ${new Date(state.tribal_opens_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' })} ET.` : '';
+    await interaction.reply({ content: `Tribal Council is not in session.${opens}`, ephemeral: true });
+    return;
+  }
   if (state.phase === 'tribe' && voter.has_immunity) { await interaction.reply({ content: 'Your tribe won immunity — you are safe and do not vote this round.', ephemeral: true }); return; }
   if (target.id === interaction.user.id) { await interaction.reply({ content: 'You cannot vote for yourself.', ephemeral: true }); return; }
   if (!targetData || targetData.is_eliminated) { await interaction.reply({ content: 'That player is not in the game.', ephemeral: true }); return; }
@@ -525,20 +534,20 @@ async function resolveEliminationTribal(guild, gameId) {
   let transition = '';
   if (aliveAfter <= 3) {
     const finalists = alivePlayers(await getPlayers(gameId)).map((p) => p.discord_id);
-    await updateGameState(gameId, { phase: 'final', finalist_pool: finalists, current_round: state.current_round + 1, active_challenge: null });
+    await updateGameState(gameId, { phase: 'final', finalist_pool: finalists, current_round: state.current_round + 1, active_challenge: null, tribal_opens_at: null, tribal_closes_at: null, sit_outs: [] });
     transition = `\n\n🔥 **FINAL 3: ${finalists.map((id) => playerMap.get(id)).join(', ')}.** Host: run \`/finaltribal\`.`;
   } else if (state.phase === 'tribe' && aliveAfter <= state.merge_at) {
     const archive = await archiveTribeRooms(guild, state, players);
     if (!archive.ok) console.error(`Merge could not archive channels: ${archive.missing.join(', ')}`);
     await mergeGameState(gameId);
-    await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null });
+    await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null, tribal_opens_at: null, tribal_closes_at: null, sit_outs: [] });
     transition = `\n\n🏝️ **THE MERGE!** ${aliveAfter} players remain — individual game from here.`;
     await post(guild, CH.announcements, `🏝️ **THE MERGE!** ${aliveAfter} players remain. It is now every player for themselves.`);
     await postGif(guild, CH.announcements, 'merge'); // "Everybody drop your buffs."
     await post(guild, CH.camp, `🏝️ **WELCOME TO THE MERGED CAMP.** ${aliveAfter} players remain. Tribe rooms are now read-only.`);
     await openMergeNaming(guild, gameId); // players suggest a merged-tribe name
   } else {
-    await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null });
+    await updateGameState(gameId, { current_round: state.current_round + 1, active_challenge: null, tribal_opens_at: null, tribal_closes_at: null, sit_outs: [] });
   }
 
   const name = playerMap.get(result.eliminated) || 'Player';
@@ -867,10 +876,51 @@ export async function handleStandings(interaction) {
 // moment (at the same time of day the game started). A drop is skipped while
 // a round's challenge is still active — the next boundary picks it back up.
 // ---------------------------------------------------------------------------
-const CHALLENGE_INTERVAL_MS = 48 * 60 * 60 * 1000;
 
 // Draw and announce a challenge for one game. Returns true if one was posted.
-const CHALLENGE_DEADLINE_LINE = 'Results reveal the moment every castaway has played — or in 24 hours, whichever comes first. Then the vote begins.';
+// Fixed-clock schedule (the container runs in America/New_York):
+// challenges drop at 5:00 PM ET and close 12h later; Tribal opens at the
+// next 5:00 PM ET and closes 12h after opening. Alternate days, like the show.
+const DROP_HOUR_LOCAL = 17;
+const CHALLENGE_WINDOW_MS = 12 * 60 * 60 * 1000;
+const TRIBAL_WINDOW_MS = 12 * 60 * 60 * 1000;
+
+export function nextDropTime(from = new Date()) {
+  const t = new Date(from);
+  t.setHours(DROP_HOUR_LOCAL, 0, 0, 0);
+  if (t <= from) t.setDate(t.getDate() + 1);
+  return t;
+}
+
+function fmtET(date) {
+  return new Date(date).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
+}
+
+const CHALLENGE_DEADLINE_LINE = 'Results reveal the moment every castaway has played — or when the challenge closes in 12 hours. Tribal Council opens at 5:00 PM ET the next day.';
+
+// When tribes are uneven, the larger tribe sits out the difference — chosen at
+// random and announced with the challenge. Sit-outs' scores do not count.
+async function pickSitOuts(gameId, state) {
+  if (state.phase !== 'tribe') return [];
+  const alive = alivePlayers(await getPlayers(gameId));
+  const byTribe = new Map();
+  alive.forEach((p) => { if (p.tribe) byTribe.set(p.tribe, [...(byTribe.get(p.tribe) || []), p]); });
+  const tribes = [...byTribe.values()];
+  if (tribes.length !== 2) return [];
+  const [larger, smaller] = tribes.sort((a, b) => b.length - a.length);
+  const extra = larger.length - smaller.length;
+  if (extra <= 0) return [];
+  const pool = [...larger];
+  const sitOuts = [];
+  for (let i = 0; i < extra; i++) sitOuts.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0].username);
+  return sitOuts;
+}
+
+function sitOutLine(sitOuts) {
+  return sitOuts.length
+    ? `\n🪑 **Sitting out** (tribes must be even): ${sitOuts.join(', ')} — your score will not count this round.`
+    : '';
+}
 
 export async function postChallengeForGame(client, game) {
   const state = await getGameState(game.id);
@@ -878,7 +928,8 @@ export async function postChallengeForGame(client, game) {
   if (state.active_challenge) return false; // never replace an official challenge mid-round
 
   const slug = CHALLENGE_SLUGS[Math.floor(Math.random() * CHALLENGE_SLUGS.length)];
-  await updateGameState(game.id, { active_challenge: slug, challenge_posted_at: new Date().toISOString() });
+  const sitOuts = await pickSitOuts(game.id, state);
+  await updateGameState(game.id, { active_challenge: slug, challenge_posted_at: new Date().toISOString(), sit_outs: sitOuts });
 
   const guild = game.discord_guild_id ? client.guilds.cache.get(game.discord_guild_id) : null;
   if (!guild) return false;
@@ -886,36 +937,30 @@ export async function postChallengeForGame(client, game) {
     ? 'Your whole tribe competes — scores combine into one tribe total. Losing tribe goes to Tribal Council.'
     : 'Every player for themselves. Only the top scorer is safe.';
   await post(guild, CH.lobby,
-    `🌙 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\n${CHALLENGE_DEADLINE_LINE}`);
+    `🌙 **${getChallengeName(slug).toUpperCase()}**\n\n${teamLine}${sitOutLine(sitOuts)}\n\nPlay here:\n${CHALLENGE_BASE}/${game.code}/challenge\n\n${CHALLENGE_DEADLINE_LINE}`);
   return true;
 }
 
-// Auto-reveal: results post the moment every living player has submitted a
-// score, or 24h after the challenge dropped — whichever comes first. This
-// gives the game its alternate-day rhythm: challenge day, then vote day.
-const RESULTS_DEADLINE_MS = 24 * 60 * 60 * 1000;
-
-async function maybeAutoRevealResults(client, game, now) {
-  const state = await getGameState(game.id);
-  if (!state?.active_challenge || !state.challenge_posted_at) return;
-  if (!['tribe', 'individual'].includes(state.phase)) return;
-
-  const alive = alivePlayers(await getPlayers(game.id));
+// Auto-reveal: results post the moment every eligible player (sit-outs are
+// excused) has submitted, or when the 12h challenge window closes.
+async function maybeAutoRevealResults(client, game, state, now) {
+  const sitOuts = state.sit_outs || [];
+  const alive = alivePlayers(await getPlayers(game.id)).filter((p) => !sitOuts.includes(p.username));
   if (!alive.length) return;
   const { data: rows } = await supabase.from('challenges')
     .select('player_id').eq('game_id', game.id).eq('round', state.current_round);
   const submitted = new Set((rows || []).map((r) => r.player_id));
   const everyoneIn = alive.every((p) => submitted.has(p.username));
-  const deadline = new Date(state.challenge_posted_at).getTime() + RESULTS_DEADLINE_MS;
+  const deadline = new Date(state.challenge_posted_at).getTime() + CHALLENGE_WINDOW_MS;
   if (!everyoneIn && now < deadline) return;
 
   const guild = game.discord_guild_id ? client.guilds.cache.get(game.discord_guild_id) : null;
   if (!guild) return;
   const msg = await revealResults(guild, game);
   if (msg) {
-    console.log(`⏰ Results auto-revealed for ${game.code} (${everyoneIn ? 'everyone played' : '24h deadline'})`);
+    console.log(`⏰ Results auto-revealed for ${game.code} (${everyoneIn ? 'everyone played' : 'window closed'})`);
   } else {
-    // Deadline hit with zero scores — keep the challenge open another day.
+    // Window closed with zero scores — keep the challenge open another day.
     await post(guild, CH.lobby, '⏳ Nobody has played the challenge yet — it stays open for another day.');
     await updateGameState(game.id, { challenge_posted_at: new Date(now).toISOString() });
   }
@@ -924,26 +969,59 @@ async function maybeAutoRevealResults(client, game, now) {
 export function startChallengeScheduler(client) {
   const TICK_MS = 60 * 1000;
   let lastTick = Date.now();
-  console.log('⏰ Challenge scheduler armed: first drop at /start, then every other day per game');
+  console.log('⏰ Scheduler armed: challenges 5pm ET (12h window), Tribal 5pm ET next day (12h window)');
   setInterval(async () => {
     const now = Date.now();
     try {
       const { data: games } = await supabase.from('games').select('*').eq('status', 'live');
       for (const game of games || []) {
-        if (!game.started_at) continue;
-        const anchor = new Date(game.started_at).getTime();
-        // Fire when a 48h boundary since start falls inside (lastTick, now].
-        // The n=0 drop is /start's own; boundaries missed while the bot was
-        // down are skipped (the next one is at most 48h away).
-        const before = Math.floor((lastTick - anchor) / CHALLENGE_INTERVAL_MS);
-        const after = Math.floor((now - anchor) / CHALLENGE_INTERVAL_MS);
-        if (after > before && after >= 1) {
-          const posted = await postChallengeForGame(client, game);
-          if (posted) console.log(`⏰ Challenge dropped for ${game.code} (day ${after * 2})`);
+        const state = await getGameState(game.id);
+        if (!state || !['tribe', 'individual'].includes(state.phase)) continue;
+        const guild = game.discord_guild_id ? client.guilds.cache.get(game.discord_guild_id) : null;
+
+        if (state.active_challenge && state.challenge_posted_at) {
+          // Challenge window open — reveal on full participation or at close.
+          await maybeAutoRevealResults(client, game, state, now);
+        } else if (state.tribal_opens_at && !state.tribal_closes_at) {
+          // Tribal scheduled — open it when its 5pm arrives.
+          if (now >= new Date(state.tribal_opens_at).getTime() && guild) {
+            const closes = new Date(now + TRIBAL_WINDOW_MS);
+            await post(guild, CH.tribal, `⚖️ **Tribal Council is now in session** — voting closes ${fmtET(closes)}. Cast your \`/vote\`.`);
+            await postGif(guild, CH.tribal, 'tribalStart'); // "Well, let's get into it."
+            await updateGameState(game.id, { tribal_closes_at: closes.toISOString() });
+            console.log(`⏰ Tribal opened for ${game.code}`);
+          }
+        } else if (state.tribal_closes_at && now >= new Date(state.tribal_closes_at).getTime()) {
+          // Tribal window closed — read the votes that exist.
+          const { data: cast } = await supabase.from('votes').select('voter_id')
+            .eq('game_id', game.id).eq('round', state.current_round).eq('vote_type', 'elimination');
+          if ((cast || []).length > 0 && guild && !resolvingGames.has(game.id)) {
+            resolvingGames.add(game.id);
+            try {
+              await post(guild, CH.tribal, '🗳️ Voting is closed. Reading the votes…');
+              await resolveEliminationTribal(guild, game.id);
+              console.log(`⏰ Tribal auto-resolved for ${game.code} at window close`);
+            } finally {
+              resolvingGames.delete(game.id);
+            }
+          } else if (guild) {
+            // No votes at all — hold tribal open another day rather than
+            // eliminating nobody.
+            await post(guild, CH.tribal, '⏳ No votes were cast. Tribal stays open another day — `/vote`!');
+            await updateGameState(game.id, { tribal_closes_at: new Date(now + 24 * 60 * 60 * 1000).toISOString() });
+          }
+        } else if (!state.active_challenge && !state.tribal_opens_at) {
+          // Ready for the next round — drop at the 5pm boundary.
+          const boundary = new Date(now);
+          boundary.setHours(DROP_HOUR_LOCAL, 0, 0, 0);
+          const b = boundary.getTime();
+          if (b > lastTick && b <= now) {
+            const posted = await postChallengeForGame(client, game);
+            if (posted) console.log(`⏰ Challenge dropped for ${game.code} (5pm ET)`);
+          }
         }
-        await maybeAutoRevealResults(client, game, now);
       }
-    } catch (e) { console.error('Scheduled challenge failed:', e.message); }
+    } catch (e) { console.error('Scheduler tick failed:', e.message); }
     lastTick = now;
   }, TICK_MS);
 }
