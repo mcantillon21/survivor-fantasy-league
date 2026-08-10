@@ -70,20 +70,23 @@ export function toughestDefence(game: Chess, attackerBudget: number): string | n
 // --- Puzzle bank ------------------------------------------------------------
 
 const MATE_IN_1: ChessPuzzle[] = [
-  { fen: '6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1', solution: 'Ra8#', title: 'Back rank', mateIn: 1 },
+  { fen: '6rk/6pp/8/6N1/8/8/8/6K1 w - - 0 1', solution: 'Nf7#', title: 'Smothered mate', mateIn: 1 },
+  { fen: '7k/R7/5N2/8/8/8/8/6K1 w - - 0 1', solution: 'Rh7#', title: 'Arabian mate', mateIn: 1 },
+  { fen: '3rkr2/8/7Q/8/8/8/8/6K1 w - - 0 1', solution: 'Qe6#', title: 'Epaulette mate', mateIn: 1 },
+  { fen: '8/4N1pk/8/8/8/8/6K1/R7 w - - 0 1', solution: 'Rh1#', title: 'Anastasia mate', mateIn: 1 },
+  { fen: '8/8/5N2/8/5P1k/5K2/6P1/5B2 w - - 0 1', solution: 'g3#', title: 'Pawn mate', mateIn: 1 },
+  { fen: '4Q3/8/8/1P1k1N2/8/2KPB3/8/8 w - - 0 1', solution: 'Qe4#', title: 'Centre-board net', mateIn: 1 },
   { fen: '6k1/8/6K1/8/8/8/8/1Q6 w - - 0 1', solution: 'Qb8#', title: 'Queen and king', mateIn: 1 },
-  { fen: '6k1/8/6K1/8/8/8/8/Q7 w - - 0 1', solution: 'Qa8#', title: 'Queen and king', mateIn: 1 },
   { fen: 'k7/8/1K6/8/8/8/8/7R w - - 0 1', solution: 'Rh8#', title: 'King and rook', mateIn: 1 },
-  { fen: '7k/8/6K1/8/8/8/8/R7 w - - 0 1', solution: 'Ra8#', title: 'King and rook', mateIn: 1 },
-  { fen: '6k1/8/6K1/8/8/8/6Q1/8 w - - 0 1', solution: 'Qa8#', title: 'Queen finish', mateIn: 1 },
   { fen: '7k/R7/1R6/8/8/8/8/6K1 w - - 0 1', solution: 'Rb8#', title: 'Two rooks', mateIn: 1 },
   { fen: 'r5k1/5ppp/8/8/8/8/5PPP/6K1 b - - 0 1', solution: 'Ra1#', title: 'Back rank', mateIn: 1 },
-  { fen: '3q2k1/5ppp/8/8/8/8/5PPP/6K1 b - - 0 1', solution: 'Qd1#', title: 'Back rank', mateIn: 1 },
+  { fen: '6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1', solution: 'Ra8#', title: 'Back rank', mateIn: 1 },
   { fen: '1q6/8/8/8/8/6k1/8/6K1 b - - 0 1', solution: 'Qb1#', title: 'Queen and king', mateIn: 1 },
-  { fen: '5k2/8/5K2/8/8/8/8/Q7 w - - 0 1', solution: 'Qa8#', title: 'Queen and king', mateIn: 1 },
 ];
 
 const MATE_IN_2: ChessPuzzle[] = [
+  { fen: '4kb1r/p2n1ppp/4q3/4p1B1/4P3/1Q6/PPP2PPP/2KR4 w k - 0 1', solution: 'Qb8+', title: 'Opera House deflection', mateIn: 2 },
+  { fen: '5r2/5ppk/8/3N1P2/8/4R3/8/6K1 w - - 0 1', solution: 'Rh3+', title: 'Anastasia net', mateIn: 2 },
   { fen: 'k2K4/1R6/8/8/8/8/8/1R6 w - - 0 1', solution: 'R7b5', title: 'Two rooks', mateIn: 2 },
   { fen: '8/7R/8/8/8/3K2Q1/8/k7 w - - 0 1', solution: 'Rh2', title: 'Queen and rook', mateIn: 2 },
   { fen: '6k1/8/1R6/8/1K6/5R2/8/8 w - - 0 1', solution: 'Rb7', title: 'Two rooks', mateIn: 2 },

@@ -18,7 +18,7 @@ export default function PracticePage() {
         <div className="central-pane glass-panel state-pane">
           <p>Practice runs only — nothing here is scored or counts toward a season.</p>
           <div style={{ display: 'grid', gap: '0.75rem', marginTop: '1.25rem' }}>
-            {CHALLENGES.map((c) => (
+            {CHALLENGES.filter((c) => !c.archived).map((c) => (
               <Link
                 key={c.slug}
                 className="button button--ghost"
