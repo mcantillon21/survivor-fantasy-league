@@ -48,22 +48,50 @@ function ChoiceEngine({
   persistenceKey,
   onComplete,
   kicker,
-}: EngineProps & { questions: ChoiceQuestion[]; kicker: string }) {
+  timeLimitSeconds,
+}: EngineProps & { questions: ChoiceQuestion[]; kicker: string; timeLimitSeconds?: number }) {
   const [state, setState] = useStoredGameState(persistenceKey, { index: 0, correct: 0 });
+  const [secondsLeft, setSecondsLeft] = useState(timeLimitSeconds ?? 0);
+  const doneRef = useRef(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
   const question = questions[state.index];
 
+  const finish = useCallback((correct: number, answered: number, timedOut: boolean) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onComplete({
+      rawScore: Math.round((correct / questions.length) * 1000),
+      summary: timedOut
+        ? `Time! ${correct} correct out of ${answered} answered.`
+        : `${correct} of ${questions.length} answers were correct.`,
+    });
+  }, [onComplete, questions.length]);
+
+  // Optional countdown: when it hits zero the run ends with the answers so far.
+  useEffect(() => {
+    if (!timeLimitSeconds) return;
+    if (secondsLeft <= 0) { finish(stateRef.current.correct, stateRef.current.index, true); return; }
+    const timer = window.setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [finish, secondsLeft, timeLimitSeconds]);
+
   const choose = (answer: number) => {
+    if (doneRef.current) return;
     const correct = state.correct + (answer === question.answer ? 1 : 0);
     if (state.index === questions.length - 1) {
-      onComplete({ rawScore: Math.round((correct / questions.length) * 1000), summary: `${correct} of ${questions.length} answers were correct.` });
+      finish(correct, questions.length, false);
       return;
     }
     setState({ index: state.index + 1, correct });
   };
 
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+  const ss = String(secondsLeft % 60).padStart(2, '0');
+
   return (
     <section className="engine-board engine-board--choice" aria-labelledby="engine-question">
-      <div className="engine-progress"><span>{kicker}</span><span>{state.index + 1} / {questions.length}</span></div>
+      <div className="engine-progress"><span>{kicker}</span><span>{timeLimitSeconds ? <span aria-label={`${secondsLeft} seconds left`}>⏱ {mm}:{ss} · </span> : null}{state.index + 1} / {questions.length}</span></div>
       <div className="progress-track"><span style={{ transform: `scaleX(${(state.index + 1) / questions.length})` }} /></div>
       <h2 id="engine-question">{question.prompt}</h2>
       <div className="answer-grid">
@@ -96,7 +124,7 @@ const TRIVIA_QUESTIONS: ChoiceQuestion[] = [
   { prompt: 'Who is the oldest Survivor winner in history?', options: ['Tom', 'Bob', 'Tony (second win)', 'Cochran'], answer: 1 },
   { prompt: 'Who said "Be the wizard"?', options: ['Coach', 'Tyson', 'Cirie', 'Taj'], answer: 0 },
   { prompt: 'Ciera Eastin...', options: ['played the most hidden immunity idols in one season.', 'played the game 4 times.', 'quit the game because she didn\'t want to go to the bathroom in the water.', 'voted out her mother.'], answer: 3 },
-  { prompt: 'Which one has a different occupation than the rest?', options: ['Tony Vlachos', 'Sarah Lacina', 'Any cop', 'Boston Rob'], answer: 3 },
+  { prompt: 'Which one has a different occupation than the rest?', options: ['Tony Vlachos', 'Sarah Lacina', 'Boston Rob'], answer: 2 },
   { prompt: 'What season was circulated around notorious mistakes made by players from previous seasons?', options: ['28', '31', '34', '36'], answer: 3 },
   { prompt: 'Cambodia Second Chance is the name of what season?', options: ['29', '30', '31', '32'], answer: 2 },
   { prompt: 'What season did not divide tribes by fans and favorites?', options: ['16', '21', '26'], answer: 1 },
@@ -690,7 +718,7 @@ function ChessPuzzleRush({ seed, onComplete }: EngineProps) {
 
 export function GameEngine({ slug, ...props }: EngineProps & { slug: string }) {
   switch (slug) {
-    case 'strategy-trivia': return <ChoiceEngine {...props} questions={TRIVIA_QUESTIONS} kicker="Survivor history" />;
+    case 'strategy-trivia': return <ChoiceEngine {...props} questions={TRIVIA_QUESTIONS} kicker="Survivor history" timeLimitSeconds={300} />;
     case 'memory-totem': return <MemoryTotem {...props} />;
     case 'island-coordinates': return <IslandCoordinates {...props} />;
     case 'risk-the-flame': return <RiskTheFlame {...props} />;

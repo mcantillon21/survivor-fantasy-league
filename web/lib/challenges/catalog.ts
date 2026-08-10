@@ -12,6 +12,9 @@ export interface ChallengeDefinition {
   duration: string;
   speedWeight: number;
   rules: string[];
+  /** Archived challenges keep their engine but are hidden from the practice
+   *  gallery and excluded from the bot's random draw. */
+  archived?: boolean;
 }
 
 export const OFFICIAL_CHALLENGE_SLUG = 'strategy-trivia';
@@ -25,9 +28,9 @@ export const CHALLENGES: ChallengeDefinition[] = [
     description: 'Forty-three deep-cut questions on seasons 1–40: records, alliances, twists, and the history only a superfan remembers.',
     category: 'Knowledge',
     difficulty: 'Hard',
-    duration: '8–12 min',
-    speedWeight: 2,
-    rules: ['One answer per question — no going back.', 'Every question is worth the same.', 'Questions run in a fixed order for every player.'],
+    duration: '5 min',
+    speedWeight: 0,
+    rules: ['A 5-minute timer runs — answer as many of the 43 questions as you can.', 'Most correct answers wins; every question is worth the same.', 'One answer per question — no going back.'],
   },
   {
     slug: 'memory-totem',
@@ -64,6 +67,7 @@ export const CHALLENGES: ChallengeDefinition[] = [
     duration: '3–5 min',
     speedWeight: 0,
     rules: ['Get as close to 21 as possible.', 'A total over 21 scores zero that round.', 'Three rounds determine the result.'],
+    archived: true,
   },
   {
     slug: 'oath-of-attention',
