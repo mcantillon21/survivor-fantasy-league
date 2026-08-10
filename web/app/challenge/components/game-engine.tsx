@@ -717,6 +717,95 @@ function ChessPuzzleRush({ seed, onComplete }: EngineProps) {
   );
 }
 
+// Whack-a-mole: torches flare briefly in a 4x4 grid — snuff them fast.
+function SnuffTheTorches({ seed, onComplete }: EngineProps) {
+  const DURATION = 45;
+  const GRID = 16;
+  const TARGET_HITS = 30; // hits for a perfect 1000
+  const rngRef = useRef(createRng(`snuff:${seed}`));
+  const [lit, setLit] = useState(-1);
+  const [stats, setStats] = useState({ hits: 0, wrong: 0 });
+  const [secondsLeft, setSecondsLeft] = useState(DURATION);
+  const litRef = useRef(-1);
+  const statsRef = useRef({ hits: 0, wrong: 0 });
+  const flareTimer = useRef(0);
+  const doneRef = useRef(false);
+
+  const finish = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    window.clearTimeout(flareTimer.current);
+    const { hits, wrong } = statsRef.current;
+    onComplete({
+      rawScore: Math.max(0, Math.min(1000, Math.round((hits / TARGET_HITS) * 1000) - wrong * 25)),
+      summary: `Snuffed ${hits} torch${hits === 1 ? '' : 'es'} in ${DURATION} seconds with ${wrong} wild swing${wrong === 1 ? '' : 's'}.`,
+    });
+  }, [onComplete]);
+
+  const scheduleFlare = useCallback(() => {
+    const gap = 250 + rngRef.current() * 450;
+    flareTimer.current = window.setTimeout(() => {
+      if (doneRef.current) return;
+      let next = Math.floor(rngRef.current() * GRID);
+      if (next === litRef.current) next = (next + 1) % GRID;
+      litRef.current = next;
+      setLit(next);
+      const litWindow = 550 + rngRef.current() * 450;
+      flareTimer.current = window.setTimeout(() => {
+        if (doneRef.current) return;
+        litRef.current = -1;
+        setLit(-1);
+        scheduleFlare();
+      }, litWindow);
+    }, gap);
+  }, []);
+
+  useEffect(() => {
+    scheduleFlare();
+    return () => window.clearTimeout(flareTimer.current);
+  }, [scheduleFlare]);
+
+  useEffect(() => {
+    if (secondsLeft <= 0) { finish(); return; }
+    const timer = window.setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [finish, secondsLeft]);
+
+  const tap = (cell: number) => {
+    if (doneRef.current) return;
+    if (cell === litRef.current) {
+      window.clearTimeout(flareTimer.current);
+      litRef.current = -1;
+      setLit(-1);
+      statsRef.current = { ...statsRef.current, hits: statsRef.current.hits + 1 };
+      setStats(statsRef.current);
+      scheduleFlare();
+    } else {
+      statsRef.current = { ...statsRef.current, wrong: statsRef.current.wrong + 1 };
+      setStats(statsRef.current);
+    }
+  };
+
+  const mm = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
+  const ss = String(secondsLeft % 60).padStart(2, '0');
+
+  return (
+    <section className="engine-board engine-board--snuff" aria-labelledby="snuff-title">
+      <div className="engine-progress"><span>{stats.hits} snuffed · {stats.wrong} wild</span><span aria-label={`${secondsLeft} seconds left`}>⏱ {mm}:{ss}</span></div>
+      <h2 id="snuff-title">Snuff the flaring torch — before it settles.</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, maxWidth: 340, margin: '0 auto', width: '100%' }} role="grid" aria-label="Torch grid">
+        {Array.from({ length: GRID }, (_, cell) => (
+          <button key={cell} type="button" onClick={() => tap(cell)} aria-label={cell === lit ? 'Flaring torch — snuff it' : 'Dormant torch'}
+            style={{ aspectRatio: '1', border: 'none', borderRadius: 10, cursor: 'pointer', fontSize: 26, background: cell === lit ? 'radial-gradient(circle, rgba(255,160,60,0.85), rgba(200,80,20,0.6))' : 'rgba(255,255,255,0.05)', transition: 'background 120ms' }}>
+            {cell === lit ? '🔥' : '·'}
+          </button>
+        ))}
+      </div>
+      <p className="engine-penalty">{TARGET_HITS} snuffs is a perfect score. Tapping a dormant torch costs 25 points.</p>
+    </section>
+  );
+}
+
 // --- Shared word bank for the word challenges --------------------------------
 const SURVIVOR_WORDS = ['SURVIVOR', 'IMMUNITY', 'ALLIANCE', 'BLINDSIDE', 'CASTAWAY', 'CHALLENGE', 'OUTLAST', 'ISLAND', 'COUNCIL', 'TORCH'];
 
@@ -1237,6 +1326,7 @@ export function GameEngine({ slug, ...props }: EngineProps & { slug: string }) {
     case 'slide-puzzle': return <SlidePuzzle {...props} />;
     case 'puzzle-rush': return <ChessPuzzleRush {...props} />;
     case 'tower-of-idols': return <TowerOfIdols {...props} />;
+    case 'snuff-the-torches': return <SnuffTheTorches {...props} />;
     case 'torch-scramble': return <TorchScramble {...props} />;
     case 'torch-transcription': return <TorchTranscription {...props} />;
     case 'jungle-word-hunt': return <JungleWordHunt {...props} />;

@@ -120,7 +120,7 @@ export const CHALLENGES: ChallengeDefinition[] = [
   {
     slug: 'tower-of-idols',
     name: 'Tower of the Idols',
-    number: '08',
+    number: '00',
     tagline: 'Six discs. Three pillars. One perfect stack.',
     description: 'The classic Tower of Hanoi: rebuild the idol tower on the far pillar in as few moves as you can. Optimal play does it in 63.',
     category: 'Puzzle',
@@ -128,6 +128,19 @@ export const CHALLENGES: ChallengeDefinition[] = [
     duration: '3–6 min',
     speedWeight: 1,
     rules: ['Move one disc at a time.', 'A bigger disc never sits on a smaller one.', 'Fewer moves score higher.'],
+    archived: true,
+  },
+  {
+    slug: 'snuff-the-torches',
+    name: 'Snuff the Torches',
+    number: '08',
+    tagline: 'Fire flares. You answer.',
+    description: 'Whack-a-mole with fire: torches flare for under a second across the grid — snuff as many as you can in 45 seconds.',
+    category: 'Endurance',
+    difficulty: 'Easy',
+    duration: '1 min',
+    speedWeight: 0,
+    rules: ['Tap only the flaring torch.', '30 snuffs is a perfect score.', 'Wild swings at dormant torches cost 25 points.'],
   },
   {
     slug: 'torch-scramble',
