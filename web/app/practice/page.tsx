@@ -23,15 +23,9 @@ export default function PracticePage() {
                 key={c.slug}
                 className="button button--ghost"
                 href={`/practice/${c.slug}`}
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '1rem', textAlign: 'left' }}
+                style={{ textAlign: 'left' }}
               >
-                <span>
-                  {c.number} · <strong>{c.name}</strong>
-                  <span style={{ opacity: 0.75 }}> — {c.tagline}</span>
-                </span>
-                <span style={{ whiteSpace: 'nowrap', opacity: 0.65, fontSize: '0.85em' }}>
-                  {c.category} · {c.difficulty} · {c.duration}
-                </span>
+                <span>{c.number} · <strong>{c.name}</strong></span>
               </Link>
             ))}
           </div>
