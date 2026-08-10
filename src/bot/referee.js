@@ -125,7 +125,7 @@ async function bestScoresForRound(gameId, round) {
 
 export async function resolveImmunity(gameId) {
   const state = await getGameState(gameId);
-  const scores = await bestScoresForRound(gameId, state.current_round);
+  let scores = await bestScoresForRound(gameId, state.current_round);
   if (scores.length === 0) return { empty: true };
 
   await supabase.from('players').update({ has_immunity: false }).eq('game_id', gameId).eq('is_eliminated', false);
@@ -134,6 +134,9 @@ export async function resolveImmunity(gameId) {
     const players = await getPlayers(gameId);
     const tribeByName = new Map(players.map((p) => [p.username, p.tribe]));
     const totals = new Map();
+    // Sit-outs (larger tribe evening the numbers) do not count toward totals.
+    const sitOuts = state.sit_outs || [];
+    scores = scores.filter((s) => !sitOuts.includes(s.player_id));
     scores.forEach((s) => {
       const tribe = s.tribe || tribeByName.get(s.player_id);
       if (tribe) totals.set(tribe, (totals.get(tribe) || 0) + s.score);
