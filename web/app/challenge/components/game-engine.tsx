@@ -960,7 +960,6 @@ function JungleWordHunt({ seed, persistenceKey, onComplete }: EngineProps) {
           );
         }))}
       </div>
-      <p className="engine-penalty">Tap a word&apos;s first letter, then its last letter. Words run in any straight line, forward or backward. Still hidden: {WORD_HUNT_WORDS.filter((w) => !found.includes(w)).join(', ') || 'none'}.</p>
       <div className="engine-actions">
         <button type="button" className="button button--ghost" onClick={() => finish(found)}>Finish with what I found</button>
       </div>
