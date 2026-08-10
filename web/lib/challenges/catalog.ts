@@ -211,7 +211,7 @@ export const CHALLENGES: ChallengeDefinition[] = [
     difficulty: 'Hard',
     duration: '5 min',
     speedWeight: 0,
-    rules: ['Click a piece, then its target square.', 'Puzzles ramp up: mate-in-1 → mate-in-2 → mate-in-3.', 'On longer mates the engine answers with its best defence.', 'Harder mates are worth more; solve as many as you can in 5 minutes.'],
+    rules: ['Click a piece, then its target square.', 'Puzzles ramp up: mate-in-1 → mate-in-2 → mate-in-3.', 'On longer mates the engine answers with its best defence.', 'Harder mates are worth more, and the score has no cap — 15 points is 1000, and great runs keep climbing.'],
   },
 ];
 

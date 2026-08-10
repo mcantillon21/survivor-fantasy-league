@@ -16,8 +16,8 @@ test('seeded random output is deterministic', () => {
   assert.deepEqual([first(), first(), first()], [second(), second(), second()]);
 });
 
-test('scores remain inside the shared 0–1000 range', () => {
-  assert.equal(normalizeScore(1200, 0, 1), 1000);
+test('scores floor at zero and are otherwise uncapped', () => {
+  assert.equal(normalizeScore(1200, 0, 1), 1200);
   assert.equal(normalizeScore(200, 500, 2), 0);
   assert.equal(normalizeScore(900, 30, 2), 840);
 });

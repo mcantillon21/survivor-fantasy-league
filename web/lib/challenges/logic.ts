@@ -34,8 +34,10 @@ export function shuffleSeeded<T>(items: readonly T[], seed: string) {
   return shuffled;
 }
 
+// Scores have no upper cap: every challenge except Puzzle Rush already tops
+// out at 1000 by construction, and Puzzle Rush deliberately keeps climbing.
 export function normalizeScore(rawScore: number, elapsedSeconds: number, speedWeight: number) {
-  return clamp(Math.round(rawScore - elapsedSeconds * speedWeight), 0, 1000);
+  return Math.max(0, Math.round(rawScore - elapsedSeconds * speedWeight));
 }
 
 export function caesarEncode(input: string, shift: number) {
