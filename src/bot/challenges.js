@@ -7,7 +7,7 @@ export const CHALLENGE_CHOICES = [
   { name: 'Vault Lock', value: 'vault-lock' },
   { name: 'Shipwreck Slide', value: 'slide-puzzle' },
   { name: 'Puzzle Rush', value: 'puzzle-rush' },
-  { name: 'Tower of the Idols', value: 'tower-of-idols' },
+  { name: 'Snuff the Torches', value: 'snuff-the-torches' },
   { name: 'Torch Scramble', value: 'torch-scramble' },
   { name: 'Camp Transcription', value: 'torch-transcription' },
   { name: 'Jungle Word Hunt', value: 'jungle-word-hunt' },
@@ -17,7 +17,7 @@ export const CHALLENGE_CHOICES = [
 ];
 
 // Archived challenges: out of the draw, but old rounds may still reference them.
-const ARCHIVED_CHALLENGE_NAMES = { 'risk-the-flame': 'Risk the Flame' };
+const ARCHIVED_CHALLENGE_NAMES = { 'risk-the-flame': 'Risk the Flame', 'tower-of-idols': 'Tower of the Idols' };
 
 export function getChallengeName(slug) {
   if (ARCHIVED_CHALLENGE_NAMES[slug]) return ARCHIVED_CHALLENGE_NAMES[slug];
